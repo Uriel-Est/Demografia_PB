@@ -1,0 +1,416 @@
+Nível;Indicador;2010;Unidade
+2;Amostra - Resultados gerais;;
+2.1;Domicílios particulares permamentes;;
+2.1.1;Classe de rendimento nominal mensal domiciliar per capita;;
+2.1.1.1;Sem rendimento;44414;domicílios
+2.1.1.2;Até 1/4 de salário mínimo;209050;domicílios
+2.1.1.3;Mais de 1/4 a 1/2 salário mínimo;261678;domicílios
+2.1.1.4;Mais de 1/2 a 1 salário mínimo;317115;domicílios
+2.1.1.5;Mais de 1 a 2 salários mínimos;142961;domicílios
+2.1.1.6;Mais de 2 a 3 salários mínimos;41419;domicílios
+2.1.1.7;Mais de 3 a 5 salários mínimos;29911;domicílios
+2.1.1.8;Mais de 5 salários mínimos;33979;domicílios
+2.1.2;Com alguns bens duráveis existentes no domicílio;;
+2.1.2.1;Automóvel para uso particular;244681;domicílios
+2.1.2.2;Geladeira;957097;domicílios
+2.1.2.3;Máquina de lavar roupa;216380;domicílios
+2.1.2.4;Microcomputador;233459;domicílios
+2.1.2.4.1;Com acesso à internet;186949;domicílios
+2.1.2.5;Motocicleta para uso particular;293983;domicílios
+2.1.2.6;Rádio;859077;domicílios
+2.1.2.7;Televisão;1029736;domicílios
+2.1.3;Com rendimento domiciliar;1036113;domicílios
+2.1.3.1;Situação domiciliar;;
+2.1.3.1.1;Urbana;798530;domicílios
+2.1.3.1.2;Rural;237583;domicílios
+2.1.4;Existência de água canalizada e forma de abastecimento de água;;
+2.1.4.1;Tinham;917081;domicílios
+2.1.4.1.1;Tinham água canalizada em pelo menos um cômodo;890221;domicílios
+2.1.4.1.1.1;Rede geral de distribuição;808249;domicílios
+2.1.4.1.1.2;Outra forma de abastecimento;81972;domicílios
+2.1.4.1.2;Tinham água canalizada no terreno ou propriedade;26860;domicílios
+2.1.4.1.2.1;Rede geral de distribuição;17843;domicílios
+2.1.4.1.2.2;Outra forma de abastecimento;9017;domicílios
+2.1.4.2;Não tinham;163445;domicílios
+2.1.5;Existência de telefone;;
+2.1.5.1;Tinham;875390;domicílios
+2.1.5.1.1;Somente telefone celular;688614;domicílios
+2.1.5.1.2;Somente telefone fixo;20728;domicílios
+2.1.5.1.3;Telefone fixo e celular;166047;domicílios
+2.1.5.2;Não tinham;205137;domicílios
+2.1.6;Número de cômodos;;
+2.1.6.1;1 cômodo;4822;domicílios
+2.1.6.2;2 cômodos;22109;domicílios
+2.1.6.3;3 cômodos;62633;domicílios
+2.1.6.4;4 cômodos;151102;domicílios
+2.1.6.5;5 cômodos;321137;domicílios
+2.1.6.6;6 cômodos;227177;domicílios
+2.1.6.7;7 cômodos;131731;domicílios
+2.1.6.8;8 ou mais cômodos;159816;domicílios
+2.1.7;Número de dormitórios;;
+2.1.7.1;1 dormitório;268454;domicílios
+2.1.7.2;2 dormitórios;535480;domicílios
+2.1.7.3;3 dormitórios;234065;domicílios
+2.1.7.4;4 ou mais dormitórios;42528;domicílios
+2.1.8;Tipo de material das paredes externas;;
+2.1.8.1;Alvenaria com revestimento;968201;domicílios
+2.1.8.2;Alvenaria sem revestimento;79675;domicílios
+2.1.8.3;Madeira aparelhada;823;domicílios
+2.1.8.4;Madeira aproveitada;724;domicílios
+2.1.8.5;Palha;253;domicílios
+2.1.8.6;Taipa revestida;18422;domicílios
+2.1.8.7;Taipa não revestida;10501;domicílios
+2.1.8.8;Outro material;1927;domicílios
+2.2;Filhos tidos pelas mulheres de 10 anos ou mais de idade;3906719;pessoas
+2.2.1;Nascidos vivos;3723866;pessoas
+2.2.1.1;No período de referência de 12 meses;57790;pessoas
+2.2.2;Nascidos mortos;182852;pessoas
+2.2.3;Que estavam vivos;3222191;pessoas
+2.3;Moradores em domicílios particulares permanentes;3753152;pessoas
+2.3.1;Número de dormitórios;;
+2.3.1.1;1 dormitórios;566799;pessoas
+2.3.1.2;2 dormitórios;1874368;pessoas
+2.3.1.3;3 dormitórios;1065150;pessoas
+2.3.1.4;4 ou mais dormitórios;246835;pessoas
+2.4;Pessoas de 10 anos ou mais de idade;3161232;pessoas
+2.4.1;Classe de rendimento nominal mensal;;
+2.4.1.1;Sem rendimento;1142669;pessoas
+2.4.1.2;Até 1 salário mínimo;1330291;pessoas
+2.4.1.3;Mais de 1 a 2 salários mínimos;401054;pessoas
+2.4.1.4;Mais de 2 a 3 salários mínimos;101704;pessoas
+2.4.1.5;Mais de 3 a 5 salários mínimos;83566;pessoas
+2.4.1.6;Mais de 5 a 10 salários mínimos;63375;pessoas
+2.4.1.7;Mais de 10 a 20 salários mínimos;26010;pessoas
+2.4.1.8;Mais de 20 salários mínimos;12563;pessoas
+2.4.2;Com rendimento;2018563;pessoas
+2.4.2.1;Sexo;;
+2.4.2.1.1;Masculino;975128;pessoas
+2.4.2.1.2;Feminino;1043435;pessoas
+2.4.3;Situação de ocupação na semana de referência;;
+2.4.3.1;Ocupada;;
+2.4.3.1.1;Com rendimento de trabalho;1247528;pessoas
+2.4.3.1.1.1;Sexo;;
+2.4.3.1.1.1.1;Masculino;753634;pessoas
+2.4.3.1.1.1.2;Feminino;493894;pessoas
+2.4.3.1.2;Classe de rendimento nominal mensal de todos os trabalhos;;
+2.4.3.1.2.1;Sem rendimento;230640;pessoas
+2.4.3.1.2.2;Até 1 salário mínimo;753922;pessoas
+2.4.3.1.2.3;Mais de 1 a 2 salários mínimos;283645;pessoas
+2.4.3.1.2.4;Mais de 2 a 3 salários mínimos;73164;pessoas
+2.4.3.1.2.5;Mais de 3 a 5 salários mínimos;61133;pessoas
+2.4.3.1.2.6;Mais de 5 a 10 salários mínimos;49019;pessoas
+2.4.3.1.2.7;Mais de 10 a 20 salários mínimos;19063;pessoas
+2.4.3.1.2.8;Mais de 20 salários mínimos;7582;pessoas
+2.4.3.1.3;Trabalho principal;1478168;pessoas
+2.4.3.1.3.1;Grandes grupos de ocupação;;
+2.4.3.1.3.1.1;Diretores e gerentes;44145;pessoas
+2.4.3.1.3.1.2;Membros das forças armadas, policiais e bombeiros militares;6596;pessoas
+2.4.3.1.3.1.3;Operadores de instalações e máquinas e montadores;96932;pessoas
+2.4.3.1.3.1.4;Profissionais das ciências e intelectuais;128418;pessoas
+2.4.3.1.3.1.5;Técnicos e profissionais de nível médio;70077;pessoas
+2.4.3.1.3.1.6;Trabalhadores de apoio administrativo;74434;pessoas
+2.4.3.1.3.1.7;Trabalhadores dos serviços, vendedores dos comércios e mercados;253074;pessoas
+2.4.3.1.3.1.8;Trabalhadores qualificados da agropecuária, florestais, da caça e da pesca;197322;pessoas
+2.4.3.1.3.1.9;Trabalhadores qualificados, operários e artesãos da construção, das artes mecânicas e outros ofícios;130653;pessoas
+2.4.3.1.3.1.10;Ocupações elementares;393410;pessoas
+2.4.3.1.3.1.11;Ocupações mal definidas;83107;pessoas
+2.4.3.1.3.2;Grupos de horas habitualmente trabalhadas por semana;;
+2.4.3.1.3.2.1;Até 14 horas;137731;pessoas
+2.4.3.1.3.2.2;15 a 39 horas;380470;pessoas
+2.4.3.1.3.2.3;40 a 44 horas;581219;pessoas
+2.4.3.1.3.2.4;45 a 48 horas;161301;pessoas
+2.4.3.1.3.2.5;49 horas ou mais;217446;pessoas
+2.4.3.1.3.3;Posição na ocupação;;
+2.4.3.1.3.3.1;Conta própria;324772;pessoas
+2.4.3.1.3.3.2;Empregadores;19966;pessoas
+2.4.3.1.3.3.3;Empregados;923550;pessoas
+2.4.3.1.3.3.3.1;Categoria do emprego;;
+2.4.3.1.3.3.3.1.1;Com carteira de trabalho assinada;402421;pessoas
+2.4.3.1.3.3.3.1.2;Sem carteira de trabalho assinada;408962;pessoas
+2.4.3.1.3.3.3.1.3;Militares e funcionários públicos estatutários;112167;pessoas
+2.4.3.1.3.3.4;Trabalhadores na produção para o próprio consumo;174860;pessoas
+2.4.3.1.3.3.5;Não remunerados;35021;pessoas
+2.4.3.1.3.4;Seção de atividade;;
+2.4.3.1.3.4.1;Administração pública, defesa e seguridade social;107938;pessoas
+2.4.3.1.3.4.2;Agricultura, pecuária, produção florestal, pesca e aquicultura;364080;pessoas
+2.4.3.1.3.4.3;Água, esgoto, atividades de gestão de resíduos e descontaminação;12985;pessoas
+2.4.3.1.3.4.4;Alojamento e alimentação;43194;pessoas
+2.4.3.1.3.4.5;Artes, cultura, esporte e recreação;10448;pessoas
+2.4.3.1.3.4.6;Atividades administrativas e serviços complementares;23962;pessoas
+2.4.3.1.3.4.7;Atividades financeiras, de seguros e serviços relacionados;10356;pessoas
+2.4.3.1.3.4.8;Atividades imobiliárias;3467;pessoas
+2.4.3.1.3.4.9;Atividades mal especificadas;60748;pessoas
+2.4.3.1.3.4.10;Atividades profissionais, científicas e técnicas;21544;pessoas
+2.4.3.1.3.4.11;Comércio, reparação de veículos automotores e motocicletas;248646;pessoas
+2.4.3.1.3.4.12;Construção;102166;pessoas
+2.4.3.1.3.4.13;Educação;106699;pessoas
+2.4.3.1.3.4.14;Eletricidade e gás;3528;pessoas
+2.4.3.1.3.4.15;Indústrias de transformação;116956;pessoas
+2.4.3.1.3.4.16;Indústrias extrativas;6186;pessoas
+2.4.3.1.3.4.17;Informação e comunicação;10576;pessoas
+2.4.3.1.3.4.18;Organismos internacionais e outras instituições extraterritoriais;;pessoas
+2.4.3.1.3.4.19;Outras atividades de serviços;32258;pessoas
+2.4.3.1.3.4.20;Saúde humana e serviços sociais;53448;pessoas
+2.4.3.1.3.4.21;Serviços domésticos;94013;pessoas
+2.4.3.1.3.4.22;Transporte, armazenagem e correio;44971;pessoas
+2.4.4;Estado civil;;
+2.4.4.1;Casado(a);1085025;pessoas
+2.4.4.2;Desquitado(a) ou separado(a) judicialmente;38179;pessoas
+2.4.4.3;Divorciado(a);76192;pessoas
+2.4.4.4;Solteiro(a);1795883;pessoas
+2.4.4.5;Viúvo(a);165954;pessoas
+2.4.5;Estado conjugal;;
+2.4.5.1;Viviam em união;1579134;pessoas
+2.4.5.1.1;Natureza da união conjugal;;
+2.4.5.1.1.1;Casamento civil e religioso;629959;pessoas
+2.4.5.1.1.2;Somente casamento civil;290450;pessoas
+2.4.5.1.1.3;Somente casamento religioso;86383;pessoas
+2.4.5.1.1.4;União consensual;572342;pessoas
+2.4.5.2;Não viviam em união;1582098;pessoas
+2.4.5.2.1;Não viviam, mas já viveram em união;464988;pessoas
+2.4.5.2.1.1;Estado civil;;
+2.4.5.2.1.1.1;Casado(a);66667;pessoas
+2.4.5.2.1.1.2;Desquitado(a) ou separado(a) judicialmente;26391;pessoas
+2.4.5.2.1.1.3;Divorciado(a);47850;pessoas
+2.4.5.2.1.1.4;Solteiro(a);178949;pessoas
+2.4.5.2.1.1.5;Viúvo(a);145132;pessoas
+2.4.5.2.2;Nunca viveram em união;1117110;pessoas
+2.4.6;Grupo de idade;;
+2.4.6.1;10 anos;69502;pessoas
+2.4.6.1.1;Condição de atividade;;
+2.4.6.1.1.1;Economicamente ativa;3329;pessoas
+2.4.6.1.1.1.1;Condição de ocupação;;
+2.4.6.1.1.1.1.1;Ocupada;3038;pessoas
+2.4.6.1.1.1.1.2;Desocupada;291;pessoas
+2.4.6.1.1.2;Não economicamente ativa;66173;pessoas
+2.4.6.2;11 anos;66494;pessoas
+2.4.6.2.1;Condição de atividade;;
+2.4.6.2.1.1;Economicamente ativa;4223;pessoas
+2.4.6.2.1.1.1;Condição de ocupação;;
+2.4.6.2.1.1.1.1;Ocupada;3900;pessoas
+2.4.6.2.1.1.1.2;Desocupada;323;pessoas
+2.4.6.2.1.2;Não economicamente ativa;62271;pessoas
+2.4.6.3;12 anos;68804;pessoas
+2.4.6.3.1;Condição de atividade;;
+2.4.6.3.1.1;Economicamente ativa;5449;pessoas
+2.4.6.3.1.1.1;Condição de ocupação;;
+2.4.6.3.1.1.1.1;Ocupada;5167;pessoas
+2.4.6.3.1.1.1.2;Desocupada;282;pessoas
+2.4.6.3.1.2;Não economicamente ativa;63355;pessoas
+2.4.6.4;13 anos;71050;pessoas
+2.4.6.4.1;Condição de atividade;;
+2.4.6.4.1.1;Economicamente ativa;6775;pessoas
+2.4.6.4.1.1.1;Condição de ocupação;;
+2.4.6.4.1.1.1.1;Ocupada;6267;pessoas
+2.4.6.4.1.1.1.2;Desocupada;508;pessoas
+2.4.6.4.1.2;Não economicamente ativa;64275;pessoas
+2.4.6.5;14 anos;72734;pessoas
+2.4.6.5.1;Condição de atividade;;
+2.4.6.5.1.1;Economicamente ativa;9885;pessoas
+2.4.6.5.1.1.1;Condição de ocupação;;
+2.4.6.5.1.1.1.1;Ocupada;8778;pessoas
+2.4.6.5.1.1.1.2;Desocupada;1107;pessoas
+2.4.6.5.1.2;Não economicamente ativa;62849;pessoas
+2.4.6.6;15 a 19 anos;352858;pessoas
+2.4.6.6.1;Condição de atividade;;
+2.4.6.6.1.1;Economicamente ativa;116328;pessoas
+2.4.6.6.1.1.1;Condição de ocupação;;
+2.4.6.6.1.1.1.1;Ocupada;90836;pessoas
+2.4.6.6.1.1.1.2;Desocupada;25491;pessoas
+2.4.6.6.1.2;Não economicamente ativa;236531;pessoas
+2.4.6.7;20 a 24 anos;346131;pessoas
+2.4.6.7.1;Condição de atividade;;
+2.4.6.7.1.1;Economicamente ativa;214733;pessoas
+2.4.6.7.1.1.1;Condição de ocupação;;
+2.4.6.7.1.1.1.1;Ocupada;179128;pessoas
+2.4.6.7.1.1.1.2;Desocupada;35605;pessoas
+2.4.6.7.1.2;Não economicamente ativa;131397;pessoas
+2.4.6.8;25 a 29 anos;327346;pessoas
+2.4.6.8.1;Condição de atividade;;
+2.4.6.8.1.1;Economicamente ativa;229182;pessoas
+2.4.6.8.1.1.1;Condição de ocupação;;
+2.4.6.8.1.1.1.1;Ocupada;204987;pessoas
+2.4.6.8.1.1.1.2;Desocupada;24195;pessoas
+2.4.6.8.1.2;Não economicamente ativa;98164;pessoas
+2.4.6.9;30 a 34 anos;297548;pessoas
+2.4.6.9.1;Condição de atividade;;
+2.4.6.9.1.1;Economicamente ativa;213730;pessoas
+2.4.6.9.1.1.1;Condição de ocupação;;
+2.4.6.9.1.1.1.1;Ocupada;197616;pessoas
+2.4.6.9.1.1.1.2;Desocupada;16114;pessoas
+2.4.6.9.1.2;Não economicamente ativa;83819;pessoas
+2.4.6.10;35 a 39 anos;260648;pessoas
+2.4.6.10.1;Condição de atividade;;
+2.4.6.10.1.1;Economicamente ativa;188751;pessoas
+2.4.6.10.1.1.1;Condição de ocupação;;
+2.4.6.10.1.1.1.1;Ocupada;176018;pessoas
+2.4.6.10.1.1.1.2;Desocupada;12733;pessoas
+2.4.6.10.1.2;Não economicamente ativa;71897;pessoas
+2.4.6.11;40 a 44 anos;243874;pessoas
+2.4.6.11.1;Condição de atividade;;
+2.4.6.11.1.1;Economicamente ativa;173170;pessoas
+2.4.6.11.1.1.1;Condição de ocupação;;
+2.4.6.11.1.1.1.1;Ocupada;164192;pessoas
+2.4.6.11.1.1.1.2;Desocupada;8978;pessoas
+2.4.6.11.1.2;Não economicamente ativa;70704;pessoas
+2.4.6.12;45 a 49 anos;214391;pessoas
+2.4.6.12.1;Condição de atividade;;
+2.4.6.12.1.1;Economicamente ativa;148644;pessoas
+2.4.6.12.1.1.1;Condição de ocupação;;
+2.4.6.12.1.1.1.1;Ocupada;142092;pessoas
+2.4.6.12.1.1.1.2;Desocupada;6552;pessoas
+2.4.6.12.1.2;Não economicamente ativa;65747;pessoas
+2.4.6.13;50 a 54 anos;171256;pessoas
+2.4.6.13.1;Condição de atividade;;
+2.4.6.13.1.1;Economicamente ativa;111568;pessoas
+2.4.6.13.1.1.1;Condição de ocupação;;
+2.4.6.13.1.1.1.1;Ocupada;107763;pessoas
+2.4.6.13.1.1.1.2;Desocupada;3805;pessoas
+2.4.6.13.1.2;Não economicamente ativa;59689;pessoas
+2.4.6.14;55 a 59 anos;147494;pessoas
+2.4.6.14.1;Condição de atividade;;
+2.4.6.14.1.1;Economicamente ativa;80838;pessoas
+2.4.6.14.1.1.1;Condição de ocupação;;
+2.4.6.14.1.1.1.1;Ocupada;79042;pessoas
+2.4.6.14.1.1.1.2;Desocupada;1796;pessoas
+2.4.6.14.1.2;Não economicamente ativa;66656;pessoas
+2.4.6.15;60 a 64 anos;130083;pessoas
+2.4.6.15.1;Condição de atividade;;
+2.4.6.15.1.1;Economicamente ativa;52195;pessoas
+2.4.6.15.1.1.1;Condição de ocupação;;
+2.4.6.15.1.1.1.1;Ocupada;51133;pessoas
+2.4.6.15.1.1.1.2;Desocupada;1062;pessoas
+2.4.6.15.1.2;Não economicamente ativa;77888;pessoas
+2.4.6.16;65 a 69 anos;101058;pessoas
+2.4.6.16.1;Condição de atividade;;
+2.4.6.16.1.1;Economicamente ativa;28737;pessoas
+2.4.6.16.1.1.1;Condição de ocupação;;
+2.4.6.16.1.1.1.1;Ocupada;28339;pessoas
+2.4.6.16.1.1.1.2;Desocupada;397;pessoas
+2.4.6.16.1.2;Não economicamente ativa;72321;pessoas
+2.4.6.17;70 anos ou mais;219961;pessoas
+2.4.6.17.1;Condição de atividade;;
+2.4.6.17.1.1;Economicamente ativa;30173;pessoas
+2.4.6.17.1.1.1;Condição de ocupação;;
+2.4.6.17.1.1.1.1;Ocupada;29871;pessoas
+2.4.6.17.1.1.1.2;Desocupada;302;pessoas
+2.4.6.17.1.2;Não economicamente ativa;189788;pessoas
+2.4.7;Nível de instrução;;
+2.4.7.1;Sem instrução e fundamental incompleto;1945235;pessoas
+2.4.7.2;Fundamental completo e médio incompleto;435977;pessoas
+2.4.7.3;Médio completo e superior incompleto;588196;pessoas
+2.4.7.4;Superior completo;180958;pessoas
+2.4.7.5;Não determinado;10867;pessoas
+2.4.8;Sexo;;
+2.4.8.1;Feminino;1645046;pessoas
+2.4.8.1.1;Que tiveram filhos;1026541;pessoas
+2.5;Pessoas ocupadas na semana de referência;;
+2.5.1;Local de exercício do trabalho principal;;
+2.5.1.1;Mais de um município ou país;19209;pessoas
+2.5.1.2;Outro município;164254;pessoas
+2.5.1.3;País estrangeiro;250;pessoas
+2.5.1.4;Município de residência;1294455;pessoas
+2.5.1.4.1;No domicílio de residência;326409;pessoas
+2.5.1.4.2;Fora do domicílio de residência;968046;pessoas
+2.5.2;Que trabalhavam fora do domicílio e retornavam para seu domicílio diariamente;1040482;pessoas
+2.5.2.1;Tempo habitual de deslocamento para o trabalho;;
+2.5.2.1.1;Até 5 minutos;185516;pessoas
+2.5.2.1.2;De 6 minutos até meia hora;621403;pessoas
+2.5.2.1.3;Mais de meia hora até uma hora;181993;pessoas
+2.5.2.1.4;Mais de uma hora até duas horas;44435;pessoas
+2.5.2.1.5;Mais de duas horas;7135;pessoas
+2.6;População residente;3766528;pessoas
+2.6.1;Frequência à escola ou creche;;
+2.6.1.1;Frequentavam;1224467;pessoas
+2.6.1.1.1;Grupo de idade;;
+2.6.1.1.1.1;0 a 3 anos;45238;pessoas
+2.6.1.1.1.2;4 ou 5 anos;103878;pessoas
+2.6.1.1.1.3;6 anos;57379;pessoas
+2.6.1.1.1.4;7 a 14 anos;526606;pessoas
+2.6.1.1.1.5;15 a 17 anos;176328;pessoas
+2.6.1.1.1.6;18 ou 19 anos;65722;pessoas
+2.6.1.1.1.7;20 a 24 anos;89780;pessoas
+2.6.1.1.1.8;25 anos ou mais;159536;pessoas
+2.6.1.1.2;Rede de ensino;;
+2.6.1.1.2.1;Particular;252769;pessoas
+2.6.1.1.2.2;Pública;971697;pessoas
+2.6.1.2;Não frequentavam;;
+2.6.1.2.1;Não frequentavam, mas já frequentaram;2072661;pessoas
+2.6.1.2.2;Nunca frequentaram;469400;pessoas
+2.6.2;Grupo de idade;;
+2.6.2.1;0 a 3 anos;231170;pessoas
+2.6.2.2;4 ou 5 anos;121442;pessoas
+2.6.2.3;6 anos;59281;pessoas
+2.6.2.4;7 a 14 anos;541987;pessoas
+2.6.2.5;15 a 17 anos;215244;pessoas
+2.6.2.6;18 ou 19 anos;137615;pessoas
+2.6.2.7;20 a 24 anos;346131;pessoas
+2.6.2.8;25 anos ou mais;2113659;pessoas
+2.6.3;Nacionalidade;;
+2.6.3.1;Brasileira;3765131;pessoas
+2.6.3.1.1;Nata;3764722;pessoas
+2.6.3.1.2;Naturalizado;409;pessoas
+2.6.3.2;Estrangeira;1397;pessoas
+2.6.4;Tipo de deficiência permanente;;
+2.6.4.1;Auditiva;;
+2.6.4.1.1;Não consegue de modo algum;6470;pessoas
+2.6.4.1.2;Grande dificuldade;41908;pessoas
+2.6.4.1.3;Alguma dificuldade;181762;pessoas
+2.6.4.2;Mental/Intelectual;62058;pessoas
+2.6.4.3;Motora;;
+2.6.4.3.1;Não consegue de modo algum;16880;pessoas
+2.6.4.3.2;Grande dificuldade;90172;pessoas
+2.6.4.3.3;Alguma dificuldade;213753;pessoas
+2.6.4.4;Visual;;
+2.6.4.4.1;Não consegue de modo algum;8477;pessoas
+2.6.4.4.2;Grande dificuldade;142193;pessoas
+2.6.4.4.3;Alguma dificuldade;672369;pessoas
+2.6.4.5;Sem declaração;666;pessoas
+2.6.4.6;Nenhuma dessas deficiências;2719901;pessoas
+2.6.4.7;Pelo menos uma das deficiências investigadas;1045962;pessoas
+2.6.5;Naturalidade em relação ao município;;
+2.6.5.1;Natural;2747358;pessoas
+2.6.5.2;Não natural;1019170;pessoas
+2.6.6;Naturalidade em relação à Unidade da Federação;;
+2.6.6.1;Natural;3464465;pessoas
+2.6.6.2;Não natural;302063;pessoas
+2.6.6.2.1;Tempo ininterrupto de residência na Unidade da Federação;;pessoas
+2.6.6.2.1.1;Menos de 1 ano;25417;pessoas
+2.6.6.2.1.2;1 a 2 anos;36993;pessoas
+2.6.6.2.1.3;3 a 5 anos;33061;pessoas
+2.6.6.2.1.4;6 a 9 anos;39030;pessoas
+2.6.6.2.1.5;10 anos ou mais;167562;pessoas
+2.7;Valor do rendimento nominal mediano mensal;;
+2.7.1;Domicílios particulares permanentes;;
+2.7.1.1;Com rendimento domiciliar;990.00;R$
+2.7.1.1.1;Situação domiciliar;;
+2.7.1.1.1.1;Urbana;1020.00;R$
+2.7.1.1.1.2;Rural;600.00;R$
+2.7.2;Pessoas de 10 anos ou mais de idade;;
+2.7.2.1;Com rendimento;510.00;R$
+2.7.2.1.1;Sexo;;
+2.7.2.1.1.1;Masculino;510.00;R$
+2.7.2.1.1.2;Feminino;510.00;R$
+2.7.2.2;Com rendimento de trabalho, ocupada na semana de referência;510.00;R$
+2.7.2.2.1;Sexo;;
+2.7.2.2.1.1;Masculino;510.00;R$
+2.7.2.2.1.2;Feminino;510.00;R$
+2.8;Valor do rendimento nominal médio mensal;;
+2.8.1;Domicílios particulares permanentes;;
+2.8.1.1;Com rendimento domiciliar;1670.82;R$
+2.8.1.1.1;Situação domiciliar;;
+2.8.1.1.1.1;Urbana;1927.95;R$
+2.8.1.1.1.2;Rural;806.58;R$
+2.8.2;Pessoas de 10 anos ou mais de idade;;
+2.8.2.1;Com rendimento;861.84;R$
+2.8.2.1.1;Sexo;;
+2.8.2.1.1.1;Masculino;1027.49;R$
+2.8.2.1.1.2;Feminino;707.04;R$
+2.8.2.2;Com rendimento de trabalho, ocupada na semana de referência;943.75;R$
+2.8.2.2.1;Sexo;;
+2.8.2.2.1.1;Masculino;998.71;R$
+2.8.2.2.1.2;Feminino;859.89;R$
+
+
+
+Fonte: IBGE, Censo Demográfico 2010
