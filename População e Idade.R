@@ -14,6 +14,7 @@ library(sp)
 library(stringi)
 library(readxl)
 library(viridis)
+library(terra)
 
 # Carregamento de dados iniciais ------------------------------------------
 
@@ -183,33 +184,26 @@ ggplot(data = mapa_razao_2010) +
   )
 
 # Cartograma de Interpolação IDW
-# Carrega dados
-CENSO2010 <-  read.csv2(".\\Censo 2010 - Paraíba.csv")
-names(CENSO2010)
-
-# 1. Baixar e filtrar o estado da Paraíba (PB)
+# ───── 1. Estado da Paraíba em UTM-23S ─────
 uf <- geobr::read_state()
-uf_pb <- subset(uf, code_state == 25) |> 
-  st_transform(31983)  # Projeção UTM zone 23S (em metros)
+uf_pb <- subset(uf, code_state == 25) |>
+  st_transform(31983)
 
-# 2. Criar pontos centrais dos municípios (com razão de sexo já carregada!)
+# ───── 2. Centróides dos municípios com razão de sexo ─────
 mapa_points <- mapa_razao_2010 |>
   filter(!is.na(razao_sexo)) |>
   st_centroid() |>
   st_transform(31983)
 
-# 3. Extrair bounding box da Paraíba para criar a janela de observação
+# ───── 3. Bounding box como janela ─────
 bbox <- st_bbox(uf_pb)
-
 obs_window <- owin(
   xrange = c(bbox["xmin"], bbox["xmax"]),
   yrange = c(bbox["ymin"], bbox["ymax"])
 )
 
-# 4. Extrair coordenadas dos pontos
+# ───── 4. Coordenadas e objeto ppp ─────
 coords <- st_coordinates(mapa_points)
-
-# 5. Criar objeto ppp com marcas (razao_sexo)
 ppp_malaria <- ppp(
   x = coords[, 1],
   y = coords[, 2],
@@ -217,70 +211,75 @@ ppp_malaria <- ppp(
   window = obs_window
 )
 
-# 6. Interpolação IDW — output será imagem (`im`)
-idw_malaria <- Smooth.ppp(ppp_malaria, sigma = 25000)
+# ───── 5. Interpolação IDW (potência suave) ─────
+idw_malaria <- idw(ppp_malaria, power = 0.05, at = "pixels")
 
-# 7. Plot
+# ───── 6. Plot com heat.colors clássica ─────
 plot(idw_malaria,
-     main = "Razão de sexo — Suavização Kernel (PB, 2010)")
-plot(as.owin(uf_pb), add = TRUE, border = "black", lwd = 0.5)
+     main = "Interpolação IDW — Razão de sexo (PB, 2010)",
+     col = rev(heat.colors(100)),
+     ribbon = TRUE,
+     ribargs = list(
+       lab = "Homens p/100 Mulheres",
+       line = 2,
+       cex.axis = 0.8
+     ))
+
+# ───── 7. Contorno do estado ─────
+muni_pb <- read_municipality(code_muni = "PB", year = 2010) |> 
+  st_transform(31983)
+
+plot(st_geometry(muni_pb), add = TRUE, border = "black", lwd = 0.5)
 
 
 # Fazer novamente para o ano de 2022 agora
-# 📥 Carrega dados SIDRA por município
-sexo_22_M <- carregar_ou_baixar_sidra(
-  arquivo = "./sexo_22_municipios_2022.rds",
-  x = 9514,
-  period = "2022",
-  geo = "City",
-  geo.filter = list("State" = 25))
+# ─── 1. Lê SIDRA 2022  ──────────────────────────────────────
+  sexo_raw <- read_excel("sexo_22_municipios_2022.xlsx", skip = 5)
 
-# 🧼 Limpeza
-sexo_22 <- sexo_22 %>%
-  select(municipio = Município, sexo = `Sexo`, idade = `Idade`, valor = Valor) %>%
-  mutate(valor = as.numeric(valor))
+sexo <- sexo_raw %>% 
+  rename(
+    cod_full = 1,           # 7 dígitos, ex.: 2500106
+    idade    = 2,
+    homens   = 3,
+    mulheres = 4
+  ) %>% 
+  mutate(
+    cod_full   = as.integer(cod_full),
+    cod6       = cod_full %/% 10,             # corta último dígito
+    homens     = as.numeric(homens),
+    mulheres   = as.numeric(mulheres),
+    razao_sexo = 100 * homens / mulheres
+  ) %>% 
+  filter(mulheres > 0, is.finite(razao_sexo))
 
+# ─── 2. Geometria PB 2022  ──────────────────────────────────
+pb_sf <- read_municipality("PB", 2022, cache = FALSE) %>% 
+  st_transform(31983) %>% 
+  mutate(cod6 = as.integer(code_muni) %/% 10)          # mesmo corte
 
-# 📊 Calcula razão de sexo por município
-razao_2022_muni <- sexo_22 %>%
-  filter(sexo %in% c("Homens", "Mulheres"), idade != "Total") %>%
-  group_by(Municipio, sexo) %>%
-  summarise(populacao = sum(valor), .groups = "drop") %>%
-  pivot_wider(names_from = sexo, values_from = populacao) %>%
-  mutate(razao_sexo = (Homens / Mulheres) * 100)
-
-
-# 🌍 Geometria dos municípios
-muni_pb <- read_municipality(code_muni = 25, year = 2022) %>%
-  st_transform(31983)
-
-# 🔗 Junta dados demográficos com geometria
-mapa_razao_2022 <- muni_pb %>%
-  left_join(razao_2022_muni, by = c("name_muni" = "municipio")) %>%
+# ─── 3. Join por cod6  ──────────────────────────────────────
+mapa <- pb_sf %>% 
+  left_join(sexo, by = "cod6") %>% 
   filter(!is.na(razao_sexo))
 
-# 📍 Extrai pontos centrais
-mapa_points <- st_centroid(mapa_razao_2022)
+cat("Linhas após join:", nrow(mapa), "\n")    # deve ser 223
 
-# 📐 Extrai coordenadas
-coords <- st_coordinates(mapa_points)
-dados <- data.frame(razao_sexo = mapa_points$razao_sexo)
+# ─── 4. Centróides e ppp  ──────────────────────────────────
+pts   <- st_centroid(mapa)
+win   <- as.owin(st_union(pb_sf))
+xy    <- st_coordinates(pts)
 
-# 🧭 Cria SpatialPointsDataFrame
-spdf <- SpatialPointsDataFrame(coords = coords, data = dados,
-                               proj4string = CRS("+init=EPSG:31983"))
+pp <- ppp(xy[,1], xy[,2], marks = pts$razao_sexo, window = win)
+cat("Pontos no ppp:", pp$n, "\n")             # deverá ser 223
 
-# 🌱 Cria grade de interpolação
-grd <- spsample(spdf, type = "regular", n = 500)
-gridded(grd) <- TRUE
+# ─── 5. IDW e plot  ─────────────────────────────────────────
+idw_img <- idw(pp, power = 2, at = "pixels", eps = 4000)
 
-# 💫 Interpolação IDW
-idw_result <- idw(razao_sexo ~ 1, spdf, grd, idp = 0.05)
-
-# 🎨 Plot
-spplot(idw_result["var1.pred"],
-       main = "Interpolação IDW — Razão de Sexo por Município (Paraíba, 2022)")
-
+plot(idw_img,
+     main   = "Razão de Sexo — IDW (Paraíba, 2022)",
+     col    = viridis(100),
+     ribbon = TRUE)
+plot(as.owin(pb_sf), add = TRUE, border = "black", lwd = .4)
 
 
 # MYERS -------------------------------------------------------------------
