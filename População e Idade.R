@@ -1,4 +1,4 @@
-# Pacotes necessários para o script
+  # Pacotes necessários para o script
 library(sidrar)
 library(PNADcIBGE)
 library(survey)
@@ -15,6 +15,11 @@ library(stringi)
 library(readxl)
 library(viridis)
 library(terra)
+library(grid)
+library(gridExtra)
+library(raster)
+library(spData)
+library(spdep)
 
 # Carregamento de dados iniciais ------------------------------------------
 
@@ -165,11 +170,11 @@ summary(mapa_razao_2010$razao_sexo)
 ggplot(data = mapa_razao_2010) +
   geom_sf(aes(fill = razao_sexo), color = NA) +
   scale_fill_gradientn(
-    colors = c("#FFFFB2", "#FECC5C", "#FD8D3C", "#F03B20", "#BD0026"),
+    colors = c("#4575B4", "#91BFDB", "#FFFFBF", "#FC8D59", "#D73027"),
     name   = "Razão de Sexo"
   ) +
   labs(
-    title    = "Cartograma Lavado — Razão de Sexo por Município (PB, 2010)",
+    title    = "Choropeth — Razão de Sexo por Município (PB, 2010)",
     subtitle = "Preenchimento térmico proporcional à razão entre homens e mulheres",
     caption  = "Fonte: Censo 2010 — IBGE / Tabela 1378"
   ) +
@@ -233,8 +238,8 @@ plot(st_geometry(muni_pb), add = TRUE, border = "black", lwd = 0.5)
 
 
 # Fazer novamente para o ano de 2022 agora
-# ─── 1. Lê SIDRA 2022  ──────────────────────────────────────
-  sexo_raw <- read_excel("sexo_22_municipios_2022.xlsx", skip = 5)
+# ─── 1. Lê tabela para 2022  ──────────────────────────────────────
+  sexo_raw <- read_excel("sexo_22_municipios_2022.xlsx")
 
 sexo <- sexo_raw %>% 
   rename(
@@ -282,6 +287,222 @@ plot(idw_img,
 plot(as.owin(pb_sf), add = TRUE, border = "black", lwd = .4)
 
 
+## Cartograma de Calor normal
+# Cartograma Lavado — Censo 2022
+ggplot(data = mapa) +
+  geom_sf(aes(fill = razao_sexo), color = NA) +
+  scale_fill_gradientn(
+    colors = c("#FFFFB2", "#FECC5C", "#FD8D3C", "#F03B20", "#BD0026"),
+    name   = "Razão de Sexo"
+  ) +
+  labs(
+    title    = "Cartograma Lavado — Razão de Sexo por Município (PB, 2022)",
+    subtitle = "Preenchimento térmico proporcional à razão entre homens e mulheres",
+    caption  = "Fonte: Censo 2022 — Instituto Brasileiro de Geografia e Estatística (IBGE). Cálculo próprio."
+  ) +
+  theme_minimal() +
+  theme(
+    axis.title    = element_blank(),
+    axis.text     = element_blank(),
+    axis.ticks    = element_blank(),
+    plot.title    = element_text(face = "bold", size = 14),
+    plot.subtitle = element_text(size = 10),
+    plot.caption  = element_text(size = 8)
+  )
+
+
+## Global Moran's I para checar a correlação espacial xD
+# ——————————————————————————————————————————————————————————————
+# 1. Global Moran’s I para 2010
+# ——————————————————————————————————————————————————————————————
+# Preparação inicial~
+pb_sf_2010 <- read_municipality(code_muni = "PB", year = 2010) %>%
+  st_transform(31983)
+
+mapa_razao_2010 <- pb_sf_2010 %>%
+  left_join(sexo_mun_2010, by = "code_muni")
+
+map_sp_2010 <- as(mapa_razao_2010, "Spatial")
+
+# 1.1 Definir vizinhança por contiguidade (queen) 
+nb_10 <- poly2nb(mapa_razao_2010, queen = TRUE)
+
+# 1.2 Criar lista de pesos row-standardizada
+lw_10 <- nb2listw(nb_10, style = "W", zero.policy = TRUE)
+
+# 1.3 Calcular Moran’s I via Monte Carlo (999 permutações)
+set.seed(123)  # para reprodutibilidade
+moran_10 <- moran.mc(mapa_razao_2010$razao_sexo, listw = lw_10,
+                     nsim = 999, zero.policy = TRUE)
+
+# 1.4 Exibir resultados
+print(moran_10)
+#   → I observado, valor-p (simulado), e distribuição de referência
+
+# 1.5 LISA - 2010
+lisa_10 <- localmoran(mapa_razao_2010$razao_sexo, lw_10)
+
+# 1.6 Adicionar Resultados ao mapa
+mapa_razao_2010$lisa_I <- lisa_10[,1]         # valor do I local
+mapa_razao_2010$p_value <- lisa_10[,5]        # p-valor
+mapa_razao_2010$significativo <- mapa_razao_2010$p_value < 0.05
+
+# 1.7 Classificar os clusters
+media <- mean(mapa_razao_2010$razao_sexo)
+mapa_razao_2010$tipo_cluster <- ifelse(
+  mapa_razao_2010$significativo & 
+    mapa_razao_2010$razao_sexo >= media & 
+    lag.listw(lw_10, mapa_razao_2010$razao_sexo) >= media, "High-High",
+  ifelse(
+    mapa_razao_2010$significativo & 
+      mapa_razao_2010$razao_sexo < media & 
+      lag.listw(lw_10, mapa_razao_2010$razao_sexo) < media, "Low-Low", 
+    "Não-Significativo"
+  )
+)
+
+# 1.8 Representação visual dos resultados
+ggplot(mapa_razao_2010) +
+  geom_sf(aes(fill = tipo_cluster), color = NA) +
+  scale_fill_manual(
+    values = c(
+      "High-High" = "#E41A1C",      # vermelho intenso
+      "Low-Low" = "#377EB8",        # azul marcante
+      "Não-Significativo" = "#CCCCCC"  # cinza clarinho
+    ),
+    name = "Tipo de Cluster"
+  ) +
+  labs(
+    title = "Clusters Espaciais - Moran Local (LISA)",
+    subtitle = "Distribuição da razão de sexo por município — 2010",
+    caption = "Fonte: IBGE. Elaboração própria com Moran Local."
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    legend.position = "bottom",
+    plot.title = element_text(face = "bold"),
+    plot.subtitle = element_text(color = "gray30"),
+    panel.grid = element_blank()
+  )
+
+subset(mapa_razao_2010, p_value < 0.05)
+
+# ——————————————————————————————————————————————————————————————
+# 2. Global Moran’s I para 2022
+# ——————————————————————————————————————————————————————————————
+# Passo 1: Pular linhas iniciais problemáticas
+sexo_clean <- read_excel(
+  "sexo_22_municipios_2022.xlsx",
+  skip = 5,  # Ignora as 5 primeiras linhas
+  col_names = c("codigo", "municipio", "declaracao_idade", "homens", "mulheres")
+) 
+
+# Passo 2: Filtrar apenas linhas com dados municipais
+sexo_clean <- sexo_clean %>% 
+  filter(
+    !is.na(codigo),
+    declaracao_idade == "Total"  # Mantém apenas totais, não desagregações
+  ) %>% 
+  mutate(
+    municipio = str_remove(municipio, "\\s*\\(PB\\)"),  # Remove "(PB)"
+    across(c(homens, mulheres), as.numeric)  # Converte para numérico
+  )
+
+# Passo 3: Criar variável de razão de sexo
+sexo_clean <- sexo_clean %>% 
+  mutate(
+    razao_sexo = (homens / mulheres) * 100  # Razão padrão: homens por 100 mulheres
+  )
+
+# Resultado:
+head(sexo_clean)
+
+pb_sf_2022 <- read_municipality("PB", year = 2022) %>%
+  st_transform(31983) %>%
+  mutate(
+    code_muni = str_pad(str_remove_all(as.character(code_muni), "\\D"),
+                        width = 7, side = "left", pad = "0")
+  )
+
+# 2.2 Seu sexo_clean já preparado
+#    — colunas: codigo (7 dígitos), municipio, declaracao_idade, homens, mulheres, razao_sexo
+head(sexo_clean)  # já confere codigo e razao_sexo
+
+
+# 2.3 Unir shapefile + sexo_clean
+mapa_razao_sexo <- pb_sf_2022 %>%
+  left_join(sexo_clean, by = c("code_muni" = "codigo")) %>%
+  filter(!is.na(razao_sexo))
+
+cat("Municípios com razão de sexo:", nrow(mapa_razao_sexo), "\n")  # deve dar 223
+
+# 2.4 Converter para Spatial e gerar vizinhança Queen
+map_sp_2022 <- as(mapa_razao_sexo, "Spatial")
+nb_22 <- poly2nb(map_sp_2022, queen = TRUE, row.names = row.names(map_sp_2022))
+lw_22 <- nb2listw(nb_22, style = "W", zero.policy = TRUE)
+
+# 2.5 Moran I (Monte Carlo)
+set.seed(123)
+moran_22 <- moran.mc(map_sp_2022$razao_sexo, listw = lw_22,
+                     nsim = 999, zero.policy = TRUE)
+
+# 2.6 LISA (Local Moran’s I) e anexar resultados
+lisa_22 <- localmoran(map_sp_2022$razao_sexo, lw_22, zero.policy = TRUE)
+map_sp_2022$lisa_I        <- lisa_22[,1]
+map_sp_2022$p_value       <- lisa_22[,5]
+map_sp_2022$significativo <- map_sp_2022$p_value < 0.05
+
+# 2.7 Classificar clusters (High-High, Low-Low, Não-Significativo)
+media_22 <- mean(map_sp_2022$razao_sexo, na.rm = TRUE)
+map_sp_2022$tipo_cluster <- ifelse(
+  map_sp_2022$significativo &
+    map_sp_2022$razao_sexo >= media_22 &
+    lag.listw(lw_22, map_sp_2022$razao_sexo) >= media_22, "High-High",
+  ifelse(
+    map_sp_2022$significativo &
+      map_sp_2022$razao_sexo < media_22 &
+      lag.listw(lw_22, map_sp_2022$razao_sexo) < media_22, "Low-Low",
+    "Não-Significativo"
+  )
+)
+
+# Adiciona os clusters ao objeto sf original (NÃO ao Spatial)
+mapa_razao_sexo$tipo_cluster <- ifelse(
+  map_sp_2022$significativo & 
+    map_sp_2022$razao_sexo >= media_22 & 
+    lag.listw(lw_22, map_sp_2022$razao_sexo) >= media_22, "High-High",
+  ifelse(
+    map_sp_2022$significativo & 
+      map_sp_2022$razao_sexo < media_22 & 
+      lag.listw(lw_22, map_sp_2022$razao_sexo) < media_22, "Low-Low",
+    "Não-Significativo"
+  )
+)
+
+# 2.9 Cartograma com ggplot2
+ggplot(mapa_razao_sexo) +  # <<<--- OBJETO SF, NÃO SPATIAL!
+  geom_sf(aes(fill = tipo_cluster), color = "white", linewidth = 0.1) +
+  scale_fill_manual(
+    values = c(
+      "High-High"         = "#E41A1C",  # Vermelho (♂♂♂)
+      "Low-Low"           = "#377EB8",  # Azul (♀♀♀)
+      "Não-Significativo" = "#CCCCCC"   # Cinza claro
+    ),
+    name = "Padrão Espacial:"
+  ) +
+  labs(
+    title    = "Clusters de Razão de Sexo na Paraíba (2022)",
+    subtitle = "Análise LISA (Local Indicators of Spatial Association)",
+    caption  = "Fonte: Censo Demográfico IBGE, 2022 | Elaboração própria"
+  ) +
+  theme_void(base_size = 14) +
+  theme(
+    legend.position = "bottom",
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5, color = "gray30"),
+    plot.caption = element_text(color = "gray50", size = 9)
+  )
+
 # MYERS -------------------------------------------------------------------
 
 # Para 2022
@@ -304,8 +525,18 @@ indice_myers <- sum(myers_base$desvio) / 2
 
 print(indice_myers)
 
-# Para 2010
+## Gráfico de barras para Índice Myers
+ggplot(myers_base, aes(x = factor(digito_final), y = percentual)) +
+  geom_col(fill = "#0072B2") +
+  geom_hline(yintercept = 10, linetype = "dashed", color = "red") +
+  labs(
+    title = paste0("Distribuição de dígitos finais (Myers = ", round(indice_myers, 2), ")"),
+    x = "Dígito final da idade",
+    y = "Percentual (%)"
+  ) +
+  theme_minimal()
 
+# Para 2010
 
 indice_myers_2010 <- sexo_10 %>%
   filter(sexo == "Total") %>%
@@ -330,3 +561,95 @@ indice_myers_2010 <- sexo_10 %>%
   pull(indice_myers)
 
 print(indice_myers_2010)
+
+## Gráfico comparativo entre 2010 e 2022
+# Junta os dois anos em um único dataframe
+myers_comparativo <- bind_rows(
+  tibble(percentual = indice_myers_2010) %>% mutate(ano = "2010"),
+  tibble(percentual = indice_myers)      %>% mutate(ano = "2022")
+)
+
+myers_comparativo <- tibble(
+  ano = c("2010", "2022"),
+  indice_myers = c(16.3, 6.03)
+)
+
+# Plot
+# Gráfico
+g <- ggplot(myers_comparativo, aes(x = ano, y = indice_myers, fill = ano)) +
+  geom_col(width = 0.6) +
+  scale_fill_manual(values = c("2010" = "#FF0000", "2022" = "#000000")) +
+  geom_hline(yintercept = 10, linetype = "dashed", color = "gray40") +
+  geom_text(aes(label = round(indice_myers, 2)), vjust = -0.5, color = "white", size = 5) +
+  labs(
+    title = "Figura 1 – Índice de Myers — Comparativo entre 2010 e 2022",
+    x = "Ano",
+    y = "Índice Myers (%)"
+  ) +
+  theme_minimal(base_size = 13)
+
+# Fonte conforme ABNT
+grid.arrange(g, bottom = textGrob("Fonte: IBGE — Cálculo próprio", 
+                                  x = 0, hjust = 0, gp = gpar(fontsize = 10)))
+
+# Gráfico Comparativo 2010-2022
+# Processa dados de 2022
+myers_2022 <- sexo_22 %>%
+  filter(sexo == "Total") %>%
+  mutate(
+    idade_num = as.numeric(gsub("\\D", "", idade)),
+    valor = as.numeric(valor)
+  ) %>%
+  filter(idade_num >= 10, idade_num <= 99) %>%
+  mutate(digito_final = idade_num %% 10) %>%
+  group_by(digito_final) %>%
+  summarise(total = sum(valor), .groups = "drop") %>%
+  mutate(
+    percentual = total / sum(total) * 100,
+    ano = "2022"
+  )
+
+# Processa dados de 2010
+myers_2010 <- sexo_10 %>%
+  filter(sexo == "Total") %>%
+  mutate(
+    idade_num = as.numeric(gsub("\\D", "", idade)),
+    valor = as.numeric(valor)
+  ) %>%
+  filter(
+    idade_num >= 10, idade_num <= 99,
+    grepl("^\\d{2} anos$", idade)
+  ) %>%
+  mutate(digito_final = idade_num %% 10) %>%
+  group_by(digito_final) %>%
+  summarise(total = sum(valor), .groups = "drop") %>%
+  mutate(
+    percentual = total / sum(total) * 100,
+    ano = "2010"
+  )
+
+# Junta os dois
+myers_detalhado <- bind_rows(myers_2010, myers_2022)
+
+# Gráfico comparativo
+g <- ggplot(myers_detalhado, aes(x = factor(digito_final), y = percentual, fill = ano)) +
+  geom_col(position = position_dodge(width = 0.7), width = 0.6) +
+  geom_text(aes(label = round(percentual, 1)), 
+            position = position_dodge(width = 0.7), 
+            vjust = -0.5, size = 4, color = "white") +
+  scale_fill_manual(values = c("2010" = "#005f73", "2022" = "#6c757d")) +
+  geom_hline(yintercept = 10, linetype = "dashed", color = "gray40") +
+  labs(
+    title = "Distribuição dos dígitos finais da idade — Censos 2010 e 2022",
+    x = "Dígito final da idade",
+    y = "Percentual (%)",
+    fill = "Ano"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    legend.position = "top"
+  )
+
+bottom = textGrob("Fonte: IBGE. Censos Demográficos 2010 e 2022. Cálculo próprio.", 
+                  x = 0, hjust = 0, gp = gpar(fontsize = 10, fontface = "italic"))
