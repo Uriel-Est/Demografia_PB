@@ -19,6 +19,8 @@ library(grid)
 library(gridExtra)
 library(raster)
 library(spData)
+library(cowplot)
+library(ggspatial)
 library(spdep)
 
 # Carregamento de dados iniciais ------------------------------------------
@@ -53,7 +55,7 @@ info_sidra(1209)
 info_sidra(9514)
 info_sidra(1378)
 info_sidra(6579)
-info_sidra(1419)
+info_sidra(1419) #não
 
 # Função auxiliar que carrega se existir ou baixa e salva
 carregar_ou_baixar_sidra <- function(arquivo, ...) {
@@ -653,3 +655,594 @@ g <- ggplot(myers_detalhado, aes(x = factor(digito_final), y = percentual, fill 
 
 bottom = textGrob("Fonte: IBGE. Censos Demográficos 2010 e 2022. Cálculo próprio.", 
                   x = 0, hjust = 0, gp = gpar(fontsize = 10, fontface = "italic"))
+
+
+
+# Pirâmide Etária por Sexo ------------------------------------------------
+
+# 1. Carregar dados
+IDADE_SEXO_22 <- get_sidra(
+  x = 9514,
+  period = "2022",
+  geo = "State",
+  geo.filter = list("State" = 25),
+  classific = "all",
+  category = "all"
+)
+
+# 2. Processamento dos dados
+dados22 <- IDADE_SEXO_22 %>%
+  rename(sexo = "Sexo", idade_str = "Idade", populacao = "Valor") %>%
+  filter(sexo %in% c("Homens", "Mulheres")) %>%
+  mutate(
+    idade = case_when(
+      idade_str == "Menos de 1 ano" ~ 0,
+      idade_str == "100 anos ou mais" ~ 100,
+      str_detect(idade_str, "meses") ~ 0,
+      TRUE ~ as.numeric(str_extract(idade_str, "\\d+"))
+    ),
+    faixa_etaria = cut(
+      idade,
+      breaks = c(0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100, Inf),
+      labels = c("0–4", "5–9", "10–14", "15–19", "20–24", "25–29", "30–34", "35–39", "40–44", 
+                 "45–49", "50–54", "55–59", "60–64", "65–69", "70–74", "75–79", "80–84", 
+                 "85–89", "90–94", "95–99", "100+"),
+      right = FALSE
+    ),
+    sexo = factor(sexo, levels = c("Homens", "Mulheres"))
+  ) %>%
+  filter(!is.na(faixa_etaria))
+
+# 3. Preparar dados para pirâmide
+piramide22 <- dados22 %>%
+  group_by(faixa_etaria, sexo) %>%
+  summarise(pop = sum(populacao, na.rm = TRUE), .groups = "drop") %>%
+  mutate(
+    pop_abs = abs(pop),  # Valor absoluto para rótulos
+    pop_display = ifelse(sexo == "Homens", -pop, pop)  # Para posicionamento no gráfico
+  )
+
+# 4. Visualização com rótulos
+ggplot(piramide22, aes(x = faixa_etaria, y = pop_display, fill = sexo)) +
+  geom_bar(stat = "identity", width = 0.95) +
+  # Adicionar rótulos com valores
+  geom_text(
+    aes(
+      label = format(pop_abs, big.mark = ".", decimal.mark = ",", scientific = FALSE),
+      y = ifelse(piramide22$pop_display < 0, 
+                 piramide22$pop_display - max(piramide22$pop_abs)*0.03, 
+                 piramide22$pop_display + max(piramide22$pop_abs)*0.03),
+      hjust = ifelse(piramide22$pop_display < 0, 1, 0)
+    ),
+    size = 3.5,
+    color = "black"
+  ) +
+  coord_flip() +
+  scale_y_continuous(
+    labels = function(x) format(abs(x), big.mark = ".", decimal.mark = ",", scientific = FALSE),
+    limits = max(piramide22$pop_abs) * c(-1.2, 1.2)
+  ) +
+  scale_fill_manual(
+    values = c("Homens" = "#E41A1C", "Mulheres" = "#377EB8"),
+    labels = c("Masculino", "Feminino")
+  ) +
+  labs(
+    title = "Pirâmide Etária — Paraíba, Censo 2022",
+    x = "Faixa Etária",
+    y = "População",
+    fill = "Sexo"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    legend.position = "bottom",
+    axis.text.y = element_text(size = 10),
+    panel.grid.major.y = element_blank()
+  )
+
+# Pirâmide Etária 2010
+
+# 1) Leitura dos dados, pulando as 3 primeiras linhas
+IDADE_SEXO_10 <- read_excel(
+  "IDADE_SEXO_10.xlsx",
+  skip = 3,
+  col_names = c("Cod_UF", "UF", "Faixa_Etaria", "Homens", "Mulheres")
+)
+
+# 2) Limpeza e pré‑processamento
+dados10 <- IDADE_SEXO_10 %>%
+  filter(
+    !is.na(Faixa_Etaria),
+    !Faixa_Etaria %in% c("Total", "Código", "Variável", "...")  # remove totais e rótulos
+  ) %>%
+  mutate(
+    Homens   = as.numeric(Homens),
+    Mulheres = as.numeric(Mulheres)
+  ) %>%
+  # 3) Agrupar em faixas etárias de 5 em 5 anos
+  mutate(
+    faixa_etaria = case_when(
+      Faixa_Etaria %in% c("Menos de 1 ano", "0 ano", "1 ano", "2 anos", "3 anos", "4 anos", "0 a 4 anos") ~ "0–4",
+      str_detect(Faixa_Etaria, "^[5-9] anos")    | Faixa_Etaria == "5 a 9 anos"   ~ "5–9",
+      str_detect(Faixa_Etaria, "^1[0-4] anos")   | Faixa_Etaria == "10 a 14 anos"  ~ "10–14",
+      str_detect(Faixa_Etaria, "^1[5-9] anos")   | Faixa_Etaria == "15 a 19 anos"  ~ "15–19",
+      str_detect(Faixa_Etaria, "^2[0-4] anos")   | Faixa_Etaria == "20 a 24 anos"  ~ "20–24",
+      str_detect(Faixa_Etaria, "^2[5-9] anos")   | Faixa_Etaria == "25 a 29 anos"  ~ "25–29",
+      str_detect(Faixa_Etaria, "^3[0-4] anos")   | Faixa_Etaria == "30 a 34 anos"  ~ "30–34",
+      str_detect(Faixa_Etaria, "^3[5-9] anos")   | Faixa_Etaria == "35 a 39 anos"  ~ "35–39",
+      str_detect(Faixa_Etaria, "^4[0-4] anos")   | Faixa_Etaria == "40 a 44 anos"  ~ "40–44",
+      str_detect(Faixa_Etaria, "^4[5-9] anos")   | Faixa_Etaria == "45 a 49 anos"  ~ "45–49",
+      str_detect(Faixa_Etaria, "^5[0-4] anos")   | Faixa_Etaria == "50 a 54 anos"  ~ "50–54",
+      str_detect(Faixa_Etaria, "^5[5-9] anos")   | Faixa_Etaria == "55 a 59 anos"  ~ "55–59",
+      str_detect(Faixa_Etaria, "^6[0-4] anos")   | Faixa_Etaria == "60 a 64 anos"  ~ "60–64",
+      str_detect(Faixa_Etaria, "^6[5-9] anos")   | Faixa_Etaria == "65 a 69 anos"  ~ "65–69",
+      str_detect(Faixa_Etaria, "^7[0-4] anos")   | Faixa_Etaria == "70 a 74 anos"  ~ "70–74",
+      str_detect(Faixa_Etaria, "^7[5-9] anos")   | Faixa_Etaria == "75 a 79 anos"  ~ "75–79",
+      str_detect(Faixa_Etaria, "^8[0-4] anos")   | Faixa_Etaria == "80 a 84 anos"  ~ "80–84",
+      str_detect(Faixa_Etaria, "^8[5-9] anos")   | Faixa_Etaria == "85 a 89 anos"  ~ "85–89",
+      str_detect(Faixa_Etaria, "^9[0-4] anos")   | Faixa_Etaria == "90 a 94 anos"  ~ "90–94",
+      str_detect(Faixa_Etaria, "^9[5-9] anos")   | Faixa_Etaria == "95 a 99 anos"  ~ "95–99",
+      Faixa_Etaria == "100 anos ou mais"                                ~ "100+",
+      TRUE                                                              ~ NA_character_
+    )
+  ) %>%
+  filter(!is.na(faixa_etaria)) %>%
+  # 4) “Wide” → “Long” para Homens/Mulheres
+  pivot_longer(
+    cols      = c(Homens, Mulheres),
+    names_to  = "Sexo",
+    values_to = "Populacao"
+  ) %>%
+  group_by(faixa_etaria, Sexo) %>%
+  summarise(Populacao = sum(Populacao, na.rm = TRUE), .groups = "drop") %>%
+  # 5) Garantir ordem correta das faixas
+  mutate(
+    faixa_etaria = factor(faixa_etaria, levels = c(
+      "0–4","5–9","10–14","15–19","20–24","25–29","30–34",
+      "35–39","40–44","45–49","50–54","55–59","60–64",
+      "65–69","70–74","75–79","80–84","85–89","90–94",
+      "95–99","100+"
+    )),
+    # valor negativo para homens (lado esquerdo) e positivo para mulheres
+    valor = if_else(Sexo == "Homens", -Populacao, Populacao)
+  )
+
+# 6) Plot
+ggplot(dados10, aes(x = faixa_etaria, y = valor, fill = Sexo)) +
+  geom_col(width = 0.8) +
+  coord_flip() +
+  # mostra rótulos absolutos do lado de fora de cada barra
+  geom_text(
+    aes(label = comma(abs(Populacao))),
+    hjust = if_else(dados10$Sexo == "Homens", 1.1, -0.1),
+    size = 3,
+    color = "black"
+  ) +
+  scale_y_continuous(
+    labels = abs,
+    breaks = pretty_breaks(n = 6)
+  ) +
+  scale_fill_manual(
+    values = c("Homens" = "#1f78b4", "Mulheres" = "#e31a1c")
+  ) +
+  labs(
+    x = "Faixa Etária",
+    y = "População",
+    title = "Pirâmide Etária — Paraíba 2010",
+    fill = "Sexo"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position = "bottom",
+    plot.title = element_text(face = "bold", size = 16, hjust = 0.5)
+  )
+
+
+# Índice de Envelhecimento ------------------------------------------------
+
+
+library(sidrar)
+library(tidyverse)
+library(cowplot)
+
+# 1. Baixar dados separadamente para evitar limites da API
+# População 0-14 anos
+dados_jovens <- get_sidra(
+  x = 9514,
+  variable = 93,
+  period = "2022",
+  geo = "City",
+  geo.filter = list("State" = 25),
+  classific = "c287",
+  category = list("c287" = c(93070, 93084, 93085)), # 0-14 anos
+  format = 3,
+  header = TRUE
+) %>% 
+  select(cod_municipio = `Município (Código)`, municipio = Município, pop_0a14 = Valor)
+
+# População 65+ anos
+dados_idosos <- get_sidra(
+  x = 9514,
+  variable = 93,
+  period = "2022",
+  geo = "City",
+  geo.filter = list("State" = 25),
+  classific = "c287",
+  category = list("c287" = c(93096, 93097, 93098, 49108, 49109, 60040, 60041, 6653)), # 65+ anos
+  format = 3,
+  header = TRUE
+) %>% 
+  select(cod_municipio = `Município (Código)`, municipio = Município, pop_65mais = Valor)
+
+# 2. Combinar e calcular indicadores
+dados_finais <- dados_jovens %>%
+  inner_join(dados_idosos, by = c("cod_municipio", "municipio")) %>%
+  mutate(
+    # Calcular índice principal
+    indice_envelhecimento = (pop_65mais / pop_0a14) * 100,
+    
+    # Calcular indicadores complementares
+    percentual_idosos = (pop_65mais / (pop_0a14 + pop_65mais)) * 100,
+    razao_dependencia = (pop_0a14 + pop_65mais) / (pop_0a14 + pop_65mais) * 100,
+    
+    # Classificação estratégica
+    classificacao = case_when(
+      indice_envelhecimento > 100 ~ "Crítico",
+      indice_envelhecimento > 70 ~ "Alerta",
+      indice_envelhecimento > 40 ~ "Moderado",
+      TRUE ~ "Favorável"
+    )
+  ) %>%
+  arrange(desc(indice_envelhecimento))
+
+# 3. Análise de sensibilidade (comparativo 60+ vs 65+)
+# População 60+ anos para comparação
+dados_60mais <- get_sidra(
+  x = 9514,
+  variable = 93,
+  period = "2022",
+  geo = "City",
+  geo.filter = list("State" = 25),
+  classific = "c287",
+  category = list("c287" = c(93095, 93096, 93097, 93098, 49108, 49109, 60040, 60041, 6653)), # 60+ anos
+  format = 3,
+  header = TRUE
+) %>% 
+  group_by(`Município (Código)`) %>%
+  summarise(pop_60mais = sum(Valor), .groups = "drop") %>%
+  select(cod_municipio = `Município (Código)`, pop_60mais)
+
+# Adicionar ao dataframe principal
+dados_finais <- dados_finais %>%
+  left_join(dados_60mais, by = "cod_municipio") %>%
+  mutate(
+    indice_60mais = (pop_60mais / pop_0a14) * 100,
+    diferenca_abs = indice_60mais - indice_envelhecimento,
+    diferenca_rel = (diferenca_abs / indice_envelhecimento) * 100
+  )
+
+# 4. Salvar resultados detalhados
+write_csv(dados_finais, "analise_envelhecimento_pb_completa.csv")
+
+# 5. Visualizar top 15 municípios críticos
+top_criticos <- dados_finais %>%
+  select(
+    municipio,
+    "Índice (65+)" = indice_envelhecimento,
+    "Índice (60+)" = indice_60mais,
+    "Diferença (%)" = diferenca_rel,
+    classificação = classificacao
+  ) %>%
+  arrange(desc(`Índice (65+)`)) %>%
+  head(15)
+
+print(top_criticos)
+
+# Recriar dados_60mais com tratamento de agregação
+dados_60mais <- get_sidra(
+  x = 9514,
+  variable = 93,
+  period = "2022",
+  geo = "City",
+  geo.filter = list("State" = 25),
+  classific = "c287",
+  category = list("c287" = c(93095, 93096, 93097, 93098, 49108, 49109, 60040, 60041, 6653)),
+  format = 3,
+  header = TRUE
+) %>% 
+  group_by(`Município (Código)`, Município) %>%
+  summarise(pop_60mais = sum(Valor, na.rm = TRUE), .groups = "drop") %>%
+  select(cod_municipio = `Município (Código)`, pop_60mais)
+
+# Atualizar dados_finais com left_join seguro
+dados_finais <- dados_finais %>%
+  select(-matches("pop_60mais|indice_60mais")) %>%
+  left_join(dados_60mais, by = "cod_municipio") %>%
+  mutate(
+    indice_60mais = (pop_60mais / pop_0a14) * 100,
+    diferenca_abs = indice_60mais - indice_envelhecimento,
+    diferenca_rel = (diferenca_abs / indice_envelhecimento) * 100
+  ) %>%
+  replace_na(list(indice_60mais = 0, diferenca_abs = 0, diferenca_rel = 0))
+
+# Recriar top_criticos com dados completos
+top_criticos <- dados_finais %>%
+  arrange(desc(indice_envelhecimento)) %>%
+  head(15) %>%
+  select(
+    municipio,
+    "Índice (65+)" = indice_envelhecimento,
+    "Índice (60+)" = indice_60mais,
+    "Diferença (%)" = diferenca_rel,
+    classificação = classificacao
+  )
+
+print(top_criticos)
+
+# 6. Gráfico comparativo (versão corrigida)
+ggplot(dados_finais, aes(x = indice_envelhecimento, y = indice_60mais)) +
+  geom_point(aes(color = classificacao), size = 3, alpha = 0.7) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  geom_text(
+    data = top_criticos,
+    aes(x = `Índice (65+)`, 
+        y = `Índice (60+)`, 
+        label = municipio), 
+    size = 3, 
+    hjust = -0.1,
+    vjust = 0.5,
+    check_overlap = TRUE
+  ) +
+  scale_color_manual(values = c("Favorável" = "#1a9641", "Moderado" = "#a6d96a", 
+                                "Alerta" = "#fdae61", "Crítico" = "#d7191c")) +
+  labs(
+    title = "Comparação de Índices de Envelhecimento na Paraíba",
+    subtitle = "Censo Demográfico 2022 - Diferença entre critérios 60+ e 65+ anos",
+    x = "Índice de Envelhecimento (65+ anos)",
+    y = "Índice de Envelhecimento (60+ anos)",
+    caption = "Fonte: IBGE SIDRA (Tabela 9514)",
+    color = "Classificação:"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  coord_cartesian(xlim = c(0, max(dados_finais$indice_envelhecimento, na.rm = TRUE) * 1.1),
+                  ylim = c(0, max(dados_finais$indice_60mais, na.rm = TRUE) * 1.1))
+
+
+# Para realizar as coreções finais dos dados:
+# Passo 1: Identificar e remover duplicatas
+dados_finais <- dados_finais %>%
+  distinct(cod_municipio, .keep_all = TRUE)
+
+# Passo 2: Recalcular classificações
+dados_finais <- dados_finais %>%
+  mutate(
+    indice_envelhecimento = (pop_65mais / pop_0a14) * 100,
+    classificacao = case_when(
+      indice_envelhecimento > 100 ~ "Crítico",
+      indice_envelhecimento > 70 ~ "Alerta",
+      indice_envelhecimento > 40 ~ "Moderado",
+      TRUE ~ "Favorável"
+    )
+  ) %>%
+  arrange(desc(indice_envelhecimento))
+
+# Passo 3: Verificar correção
+cat("Municípios únicos:", nrow(dados_finais), "\n")
+print(table(dados_finais$classificacao))
+
+# Recria top_criticos com os dados corrigidos
+top_criticos <- dados_finais %>%
+  arrange(desc(indice_envelhecimento)) %>%
+  head(15) %>%
+  select(
+    municipio,
+    "Índice (65+)" = indice_envelhecimento,
+    "Índice (60+)" = indice_60mais,
+    "Diferença (%)" = diferenca_rel,
+    classificacao
+  )
+
+# Passo 1: Converter 'classificacao' em fator ordenado
+dados_finais$classificacao <- factor(
+  dados_finais$classificacao,
+  levels = c("Favorável", "Moderado", "Alerta", "Crítico") # Ordem CORRETA
+)
+
+# Passo 2: Atualizar o top_criticos
+top_criticos$classificacao <- factor(
+  top_criticos$classificacao,
+  levels = c("Favorável", "Moderado", "Alerta", "Crítico")
+)
+
+# Passo 3: Rodar o gráfico NOVAMENTE
+
+ggplot(dados_finais, aes(x = indice_envelhecimento, y = indice_60mais)) +
+  geom_point(aes(color = classificacao), size = 3, alpha = 0.7) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  geom_text(
+    data = top_criticos,
+    aes(x = `Índice (65+)`, 
+        y = `Índice (60+)`, 
+        label = municipio), 
+    size = 3, 
+    hjust = -0.1,
+    vjust = 0.5,
+    check_overlap = TRUE
+  ) +
+  scale_color_manual(values = c("Favorável" = "#1a9641", "Moderado" = "#a6d96a", 
+                                "Alerta" = "#fdae61", "Crítico" = "#d7191c")) +
+  labs(
+    title = "Comparação de Índices de Envelhecimento na Paraíba",
+    subtitle = "Censo 2022 - Dados Corrigidos",
+    x = "Índice de Envelhecimento (65+ anos)",
+    y = "Índice de Envelhecimento (60+ anos)",
+    caption = "Fonte: IBGE | Elaboração: Análise Demográfica",
+    color = "Classificação:"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  coord_cartesian(
+    xlim = c(0, max(dados_finais$indice_envelhecimento, na.rm = TRUE) * 1.2),
+    ylim = c(0, max(dados_finais$indice_60mais, na.rm = TRUE) * 1.2)
+  )
+
+library(geobr)
+library(ggplot2)
+library(gghighlight)
+library(ggspatial)
+library(sf)
+
+# 1. Baixar shapefile da Paraíba (2020)
+pb_shp <- read_municipality(
+  code_muni = "PB",
+  year = 2020,
+  showProgress = FALSE
+) %>%
+  mutate(code_muni = substr(code_muni, 1, 6) %>% as.numeric())
+
+# 2. Juntar com nossos dados
+dados_mapa <- pb_shp %>%
+  left_join(
+    dados_finais %>% 
+      mutate(cod_municipio = as.numeric(substr(cod_municipio, 1, 6))),
+    by = c("code_muni" = "cod_municipio")
+  )
+
+library(ggspatial)
+library(sf)
+library(cowplot)
+library(gridExtra)
+library(grid)
+library(dplyr)
+
+# Solução definitiva para os triângulos amarelos - usando geometria de pontos
+centroides_criticos <- dados_mapa %>%
+  filter(classificacao == "Crítico") %>%
+  st_centroid()
+
+# 1. Criar o mapa corretamente com marcadores visíveis
+mapa <- ggplot(dados_mapa) +
+  # Camada principal de preenchimento
+  geom_sf(aes(fill = classificacao), color = "white", size = 0.2, alpha = 0.9) +
+  
+  # Camada de marcadores VISÍVEIS - usando pontos e centroides
+  geom_sf(
+    data = centroides_criticos,
+    aes(geometry = geom),
+    color = "black",
+    shape = 24,  # Triângulo
+    fill = "yellow",
+    size = 5,    # Tamanho aumentado
+    stroke = 1.5 # Contorno reforçado
+  ) +
+  
+  scale_fill_manual(
+    values = c(
+      "Crítico" = "#d7191c", 
+      "Alerta" = "#fdae61",
+      "Moderado" = "#a6d96a",
+      "Favorável" = "#1a9641"
+    ),
+    name = "Classificação:"
+  ) +
+  
+  # Elementos de mapa
+  annotation_scale(
+    location = "bl",  # Bottom-left
+    width_hint = 0.3,
+    pad_x = unit(1.5, "cm"),  # Mais afastado
+    pad_y = unit(1.5, "cm")
+  ) +
+  annotation_north_arrow(
+    location = "tr",  # Top-right
+    height = unit(1.8, "cm"),
+    width = unit(1.8, "cm"),
+    pad_x = unit(1.5, "cm"),  # Mais afastado
+    pad_y = unit(1.5, "cm")
+  ) +
+  theme_void() +
+  theme(
+    legend.position = "none"
+  )
+
+# 2. Criar tabela formatada corretamente
+tabela_criticos <- dados_finais %>%
+  filter(classificacao %in% c("Crítico", "Alerta")) %>%
+  arrange(desc(indice_envelhecimento)) %>%
+  mutate(
+    municipio = str_remove(municipio, " - PB"),
+    indice = round(indice_envelhecimento, 1)
+  ) %>%
+  select(Município = municipio, `Índice (%)` = indice, Classificação = classificacao) %>%
+  head(8)
+
+# Formatar tabela com cores
+cores_fundo <- ifelse(
+  tabela_criticos$Classificação == "Crítico", "#fee090", "#fdae61"
+)
+
+tabela_grob <- tableGrob(
+  tabela_criticos,
+  rows = NULL,
+  theme = ttheme_minimal(
+    base_size = 12,
+    padding = unit(c(6, 6), "mm"),
+    core = list(
+      bg_params = list(fill = cores_fundo, alpha = 0.8)
+    ),
+    colhead = list(
+      bg_params = list(fill = "#2c3e50", alpha = 0.9),
+      fg_params = list(col = "white", fontface = "bold")
+    )
+  )
+)
+
+# 3. Layout final garantido
+plot_final <- ggdraw() +
+  # Título
+  draw_label(
+    "VULNERABILIDADE PREVIDENCIÁRIA NA PARAÍBA",
+    x = 0.5, y = 0.97, size = 24, fontface = "bold", color = "#2c3e50"
+  ) +
+  
+  # Subtítulo
+  draw_label(
+    "Índice de Envelhecimento = (População ≥65 anos / População 0-14 anos) × 100",
+    x = 0.5, y = 0.94, size = 16, color = "#34495e"
+  ) +
+  
+  # Mapa (70% da altura)
+  draw_plot(mapa, 0, 0.15, 1, 0.8) +
+  
+  # Tabela de municípios (direita inferior)
+  draw_plot(
+    ggplot() + 
+      annotation_custom(tabela_grob) + 
+      theme_void(),
+    x = 0.6, y = 0.02, width = 0.35, height = 0.25
+  ) +
+  
+  # Legenda dos ícones
+  draw_label("▲ Municípios Críticos", x = 0.1, y = 0.1, size = 12, fontface = "bold") +
+  
+  # Legenda de cores (esquerda inferior)
+  draw_label("Classificação:", x = 0.1, y = 0.07, size = 12, fontface = "bold", hjust = 0) +
+  draw_label("Favorável", x = 0.1, y = 0.05, size = 11, color = "#1a9641", hjust = 0) +
+  draw_label("Moderado", x = 0.2, y = 0.05, size = 11, color = "#a6d96a", hjust = 0) +
+  draw_label("Alerta", x = 0.3, y = 0.05, size = 11, color = "#fdae61", hjust = 0) +
+  draw_label("Crítico", x = 0.4, y = 0.05, size = 11, color = "#d7191c", hjust = 0) +
+  
+  # Fonte
+  draw_label(
+    "Fonte: IBGE Censo 2022 (Tabela 9514) | Elaboração: Análise Demográfica",
+    x = 0.95, y = 0.03, size = 10, hjust = 1, color = "#7f8c8d"
+  )
+
+# Salvar com alta resolução
+ggsave("cartograma_final_pb.png", plot_final, width = 16, height = 14, dpi = 300, bg = "white")
+
+
+# Índice de Dependência simples -------------------------------------------
+
+
