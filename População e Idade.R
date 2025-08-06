@@ -838,12 +838,80 @@ ggplot(dados10, aes(x = faixa_etaria, y = valor, fill = Sexo)) +
   )
 
 
-# Índice de Envelhecimento ------------------------------------------------
 
+# Idade Média/Sexo - NE ---------------------------------------------------
 
 library(sidrar)
-library(tidyverse)
-library(cowplot)
+library(dplyr)
+library(stringr)
+
+# 1) Códigos dos 9 estados do Nordeste
+uf_ne <- c(21,22,23,24,25,26,27,28,29)
+
+# 2) Puxar população por idade simples (0,1,2,…,100+ anos) e sexo
+pop_ne <- get_sidra(
+  x           = 9514,
+  period      = "2022",
+  geo         = "State",
+  geo.filter  = list("State" = uf_ne),
+  classific   = "all",
+  category    = "all"
+) %>%
+  filter(Sexo %in% c("Homens","Mulheres")) %>%
+  rename(
+    UF        = `Unidade da Federação`,
+    IdadeRaw  = Idade,
+    Sexo      = Sexo,
+    Populacao = Valor
+  ) %>%
+  # 3) Converter Populacao e extrair número de anos em IdadeRaw
+  mutate(
+    Populacao = as.numeric(Populacao),
+    IdadeNum = case_when(
+      str_detect(IdadeRaw, "Menos de")       ~ 0,
+      str_detect(IdadeRaw, "meses")          ~ 0,
+      str_detect(IdadeRaw, "100 anos ou mais") ~ 100,
+      str_detect(IdadeRaw, "\\d+")           ~ as.numeric(str_extract(IdadeRaw, "\\d+")),
+      TRUE                                   ~ NA_real_
+    )
+  ) %>%
+  filter(!is.na(IdadeNum))  # retira linhas como "Total", etc.
+
+# 4) Calcular a idade média por UF
+idade_media_ne <- pop_ne %>%
+  group_by(UF, IdadeNum) %>%
+  summarise(
+    PopIdade = sum(Populacao, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  group_by(UF) %>%
+  summarise(
+    idade_media = sum(IdadeNum * PopIdade) / sum(PopIdade),
+    .groups = "drop"
+  ) %>%
+  arrange(UF)
+
+print(idade_media_ne)
+
+
+idade_media_ne_sexo <- pop_ne %>%
+  # 1) totaliza a população por estado, sexo e idade
+  group_by(UF, Sexo, IdadeNum) %>%
+  summarise(
+    PopIdade = sum(Populacao, na.rm = TRUE),
+    .groups   = "drop"
+  ) %>%
+  # 2) calcula a idade média ponderada dentro de cada UF e Sexo
+  group_by(UF, Sexo) %>%
+  summarise(
+    idade_media = sum(IdadeNum * PopIdade) / sum(PopIdade),
+    .groups     = "drop"
+  ) %>%
+  arrange(UF, Sexo)
+
+print(idade_media_ne_sexo)
+
+# Índice de Envelhecimento ------------------------------------------------
 
 # 1. Baixar dados separadamente para evitar limites da API
 # População 0-14 anos
@@ -1077,7 +1145,7 @@ ggplot(dados_finais, aes(x = indice_envelhecimento, y = indice_60mais)) +
     subtitle = "Censo 2022 - Dados Corrigidos",
     x = "Índice de Envelhecimento (65+ anos)",
     y = "Índice de Envelhecimento (60+ anos)",
-    caption = "Fonte: IBGE | Elaboração: Análise Demográfica",
+    caption = "Fonte: IBGE | Elaboração Própria",
     color = "Classificação:"
   ) +
   theme_minimal() +
@@ -1087,11 +1155,6 @@ ggplot(dados_finais, aes(x = indice_envelhecimento, y = indice_60mais)) +
     ylim = c(0, max(dados_finais$indice_60mais, na.rm = TRUE) * 1.2)
   )
 
-library(geobr)
-library(ggplot2)
-library(gghighlight)
-library(ggspatial)
-library(sf)
 
 # 1. Baixar shapefile da Paraíba (2020)
 pb_shp <- read_municipality(
@@ -1108,13 +1171,6 @@ dados_mapa <- pb_shp %>%
       mutate(cod_municipio = as.numeric(substr(cod_municipio, 1, 6))),
     by = c("code_muni" = "cod_municipio")
   )
-
-library(ggspatial)
-library(sf)
-library(cowplot)
-library(gridExtra)
-library(grid)
-library(dplyr)
 
 # Solução definitiva para os triângulos amarelos - usando geometria de pontos
 centroides_criticos <- dados_mapa %>%
@@ -1235,14 +1291,468 @@ plot_final <- ggdraw() +
   
   # Fonte
   draw_label(
-    "Fonte: IBGE Censo 2022 (Tabela 9514) | Elaboração: Análise Demográfica",
+    "Fonte: IBGE Censo 2022 (Tabela 9514) | Elaboração Própria",
     x = 0.95, y = 0.03, size = 10, hjust = 1, color = "#7f8c8d"
   )
 
 # Salvar com alta resolução
-ggsave("cartograma_final_pb.png", plot_final, width = 16, height = 14, dpi = 300, bg = "white")
+ggsave("índice de envelhecimento b.png", plot_final, width = 16, height = 14, dpi = 300, bg = "white")
 
 
-# Índice de Dependência simples -------------------------------------------
+# Razão de Dependência simples -------------------------------------------
 
+# 1. Baixar e processar dados de forma consolidada
+get_population_data <- function(categories, pop_name) {
+  get_sidra(
+    x = 9514,
+    variable = 93,
+    period = "2022",
+    geo = "City",
+    geo.filter = list("State" = 25),
+    classific = "c287",
+    category = list("c287" = categories),
+    format = 3,
+    header = TRUE
+  ) %>% 
+    group_by(`Município (Código)`, Município) %>%
+    summarise(!!pop_name := sum(Valor, na.rm = TRUE), .groups = "drop") %>%
+    select(cod_municipio = `Município (Código)`, municipio = Município, !!pop_name) %>%
+    mutate(cod_municipio = as.numeric(substr(cod_municipio, 1, 6)))
+}
+
+# Definir categorias por faixa etária
+categorias_jovens <- c(93070, 93084, 93085)        # 0-14 anos
+categorias_idosos <- c(93096, 93097, 93098, 49108, 49109, 60040, 60041, 6653) # 65+ anos
+categorias_ativa <- c(93086:93095)                  # 15-64 anos (todas as subfaixas)
+
+# Baixar dados de forma única e consolidada
+dados_jovens <- get_population_data(categorias_jovens, "pop_0a14")
+dados_idosos <- get_population_data(categorias_idosos, "pop_65mais")
+dados_ativa <- get_population_data(categorias_ativa, "pop_15_64")
+
+# 2. Combinar todos os dados sem duplicações
+dados_completos <- dados_jovens %>%
+  inner_join(dados_idosos, by = c("cod_municipio", "municipio")) %>%
+  inner_join(dados_ativa, by = c("cod_municipio", "municipio")) %>%
+  distinct(cod_municipio, .keep_all = TRUE) %>%  # Garantir unicidade
+  mutate(
+    # Calcular razão de dependência
+    razao_dependencia = (pop_0a14 + pop_65mais) / pop_15_64 * 100,
+    
+    # Calcular índice de envelhecimento
+    indice_envelhecimento = (pop_65mais / pop_0a14) * 100,
+    
+    # Classificação da razão de dependência
+    classificacao_rd = case_when(
+      razao_dependencia < 45 ~ "Baixa dependência",
+      razao_dependencia < 60 ~ "Dependência moderada",
+      TRUE ~ "Alta dependência"
+    ),
+    
+    # Classificação do envelhecimento
+    classificacao_ie = case_when(
+      indice_envelhecimento > 100 ~ "Crítico",
+      indice_envelhecimento > 70 ~ "Alerta",
+      indice_envelhecimento > 40 ~ "Moderado",
+      TRUE ~ "Favorável"
+    )
+  )
+
+# Verificar número de municípios (deve ser 223)
+cat("Número de municípios:", nrow(dados_completos), "\n")
+
+# 3. Mapa temático da razão de dependência (corrigido)
+pb_shp <- read_municipality("PB", year = 2020) %>%
+  mutate(code_muni = as.numeric(substr(code_muni, 1, 6)))
+
+dados_mapa_rd <- pb_shp %>%
+  inner_join(dados_completos, by = c("code_muni" = "cod_municipio"))
+
+ggplot(dados_mapa_rd) +
+  geom_sf(aes(fill = razao_dependencia), color = "white", size = 0.2) +
+  scale_fill_viridis_c(
+    option = "inferno",
+    name = "Razão de Dependência (%)",
+    direction = -1,
+    breaks = seq(30, 100, by = 10)
+  ) +
+  labs(
+    title = "RAZÃO DE DEPENDÊNCIA DEMOGRÁFICA NA PARAÍBA",
+    subtitle = "(População 0-14 + 65+ anos) / População 15-64 anos × 100",
+    caption = "Fonte: IBGE Censo 2022"
+  ) +
+  theme_void() +
+  theme(
+    legend.position = "bottom",
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    legend.key.width = unit(2, "cm")
+  )
+
+# 4. Análise dos municípios mais críticos (top 10)
+top_dependencia <- dados_completos %>%
+  arrange(desc(razao_dependencia)) %>%
+  select(
+    municipio,
+    "Pop 0-14" = pop_0a14,
+    "Pop 65+" = pop_65mais,
+    "Pop 15-64" = pop_15_64,
+    "Razão (%)" = razao_dependencia,
+    "Classificação" = classificacao_rd
+  ) %>%
+  head(10)
+
+print(top_dependencia)
+
+# 5. Gráfico de correlação entre indicadores
+ggplot(dados_completos, aes(x = indice_envelhecimento, y = razao_dependencia)) +
+  geom_point(aes(color = classificacao_ie), size = 3, alpha = 0.7) +
+  geom_smooth(method = "lm", color = "darkred", se = FALSE) +
+  scale_color_manual(
+    values = c("Favorável" = "#1a9641", "Moderado" = "#a6d96a",
+               "Alerta" = "#fd8d3c", "Crítico" = "#d7191c"),
+    name = "Nível de Envelhecimento"
+  ) +
+  labs(
+    x = "Índice de Envelhecimento (%)",
+    y = "Razão de Dependência (%)",
+    title = "Relação entre Envelhecimento e Dependência Demográfica",
+    subtitle = "Municípios da Paraíba - Censo 2022"
+  ) +
+  theme_minimal()
+
+# 6. Análise estatística
+cat("\n=== ANÁLISE ESTATÍSTICA ===\n")
+cat("Média da Razão de Dependência:", round(mean(dados_completos$razao_dependencia), 1), "%\n")
+cat("Mínimo:", round(min(dados_completos$razao_dependencia), 1), "%\n")
+cat("Máximo:", round(max(dados_completos$razao_dependencia), 1), "%\n")
+cat("Município com maior dependência:", top_dependencia$municipio[1], "=", round(top_dependencia$`Razão (%)`[1], 1), "%\n")
+cat("Correlação entre indicadores:", round(cor(dados_completos$indice_envelhecimento, dados_completos$razao_dependencia), 2), "\n")
+
+
+## Cartograma
+
+# Verificar classificação
+cat("\n=== VERIFICAÇÃO DE CLASSIFICAÇÃO ===\n")
+dados_mapa %>%
+  as.data.frame() %>%
+  select(municipio, razao_dependencia, classificacao_rd) %>%
+  arrange(desc(razao_dependencia)) %>%
+  head(10) %>%
+  print()
+
+# Verificar cores da tabela
+cat("\n=== CORES DA TABELA ===\n")
+tabela_dados %>% 
+  mutate(cor = cores_fundo) %>%
+  print()
+
+
+## Cartograma
+# 1. Carregar shapefile e dados
+pb_shp <- read_municipality("PB", year = 2020) %>%
+  mutate(code_muni = as.numeric(substr(code_muni, 1, 6)))
+
+dados_mapa <- pb_shp %>%
+  left_join(dados_completos, by = c("code_muni" = "cod_municipio"))
+
+# 2. Aplicar classificação de dependência COM FAIXAS AJUSTADAS
+dados_mapa <- dados_mapa %>%
+  mutate(
+    classificacao_dep = case_when(
+      razao_dependencia > 60 ~ "Crítico",
+      razao_dependencia > 50 ~ "Alerta",
+      razao_dependencia > 40 ~ "Moderado",
+      TRUE ~ "Favorável"
+    )
+  )
+
+# 3. Selecionar top 10 dependência para tabela
+top10_dependencia <- dados_mapa %>%
+  st_drop_geometry() %>%
+  arrange(desc(razao_dependencia)) %>%
+  head(10)
+
+# 4. Selecionar APENAS CRÍTICOS para marcadores (máximo 3)
+municipios_criticos <- dados_mapa %>%
+  filter(classificacao_dep == "Crítico") %>%
+  arrange(desc(razao_dependencia)) %>%
+  head(3)  # No máximo 3 municípios
+
+centroides_criticos <- municipios_criticos %>%
+  st_centroid()
+
+# 5. Criar mapa
+mapa <- ggplot(dados_mapa) +
+  geom_sf(aes(fill = classificacao_dep), color = "white", size = 0.2, alpha = 0.9) +
+  
+  # Marcadores APENAS para municípios críticos (máximo 3)
+  geom_sf(
+    data = centroides_criticos,
+    aes(geometry = geom),
+    color = "black",
+    shape = 24,
+    fill = "yellow",
+    size = 5,    # Aumentado para melhor visibilidade
+    stroke = 1.5 # Contorno reforçado
+  ) +
+  
+  scale_fill_manual(
+    values = c(
+      "Crítico" = "#d7191c",
+      "Alerta" = "#fdae61",
+      "Moderado" = "#a6d96a",
+      "Favorável" = "#1a9641"
+    ),
+    name = "Classificação de Dependência:"
+  ) +
+  
+  annotation_scale(
+    location = "bl",
+    width_hint = 0.3,
+    pad_x = unit(1.5, "cm"),
+    pad_y = unit(1.5, "cm")
+  ) +
+  annotation_north_arrow(
+    location = "tr",
+    height = unit(1.8, "cm"),
+    width = unit(1.8, "cm"),
+    pad_x = unit(1.5, "cm"),
+    pad_y = unit(1.5, "cm")
+  ) +
+  theme_void() +
+  theme(legend.position = "none")
+
+# 6. Criar tabela com top 10
+tabela_dados <- top10_dependencia %>%
+  mutate(
+    municipio = str_remove(municipio, " - PB"),
+    razao = round(razao_dependencia, 1)
+  ) %>%
+  select(Município = municipio, `Razão (%)` = razao, Classificação = classificacao_dep)
+
+# Definir cores com transparência reduzida
+cores_fundo <- case_when(
+  tabela_dados$Classificação == "Crítico" ~ "#d7191c80",  # Vermelho com 50% transparência
+  tabela_dados$Classificação == "Alerta" ~ "#fdae6180",    # Laranja com 50% transparência
+  tabela_dados$Classificação == "Moderado" ~ "#a6d96a80",  # Verde claro com 50% transparência
+  tabela_dados$Classificação == "Favorável" ~ "#1a964180"  # Verde com 50% transparência
+)
+
+# Tabela minimalista
+tabela_grob <- tableGrob(
+  tabela_dados,
+  rows = NULL,
+  theme = ttheme_minimal(
+    base_size = 12,
+    padding = unit(c(6, 6), "mm"),
+    core = list(
+      bg_params = list(fill = cores_fundo),
+      fg_params = list(col = "black")  # Texto preto para contraste
+    ),
+    colhead = list(
+      bg_params = list(fill = "#2c3e50"),
+      fg_params = list(col = "white", fontface = "bold")
+    )
+  )
+)
+
+# 7. Layout final
+plot_final <- ggdraw() +
+  draw_label(
+    "VULNERABILIDADE PREVIDENCIÁRIA NA PARAÍBA",
+    x = 0.5, y = 0.97, size = 24, fontface = "bold", color = "#2c3e50"
+  ) +
+  
+  draw_label(
+    "Razão de Dependência = (População 0-14 + 65+ anos) / População 15-64 anos × 100",
+    x = 0.5, y = 0.94, size = 16, color = "#34495e"
+  ) +
+  
+  draw_plot(mapa, 0, 0.15, 1, 0.8) +
+  
+  draw_plot(
+    ggplot() + annotation_custom(tabela_grob) + theme_void(),
+    x = 0.6, y = 0.02, width = 0.35, height = 0.25
+  ) +
+  
+  draw_label("▲ Municípios Críticos de Dependência", 
+             x = 0.1, y = 0.1, size = 12, fontface = "bold") +
+  
+  draw_label("Classificação de Dependência:", 
+             x = 0.1, y = 0.07, size = 12, fontface = "bold", hjust = 0) +
+  draw_label("Favorável (<40%)", x = 0.1, y = 0.05, size = 11, color = "#1a9641", hjust = 0) +
+  draw_label("Moderado (40-50%)", x = 0.25, y = 0.05, size = 11, color = "#a6d96a", hjust = 0) +
+  draw_label("Alerta (50-60%)", x = 0.4, y = 0.05, size = 11, color = "#fdae61", hjust = 0) +
+  draw_label("Crítico (>60%)", x = 0.55, y = 0.05, size = 11, color = "#d7191c", hjust = 0) +
+  
+  draw_label(
+    "Fonte: IBGE Censo 2022 (Tabela 9514) | Elaboração Própria",
+    x = 0.95, y = 0.03, size = 10, hjust = 1, color = "#7f8c8d"
+  )
+
+# 8. Salvar
+ggsave("cartograma_dependencia_pb_final.png", plot_final, 
+       width = 16, height = 14, dpi = 300, bg = "white")
+
+
+## Scatterplot 2²
+library(ggplot2)
+library(ggrepel)
+
+# 0. Criar a classificação de dependência (se ainda não existir)
+dados_completos <- dados_completos %>%
+  mutate(
+    classificacao_dep = case_when(
+      razao_dependencia > 60 ~ "Crítico",
+      razao_dependencia > 50 ~ "Alerta",
+      razao_dependencia > 40 ~ "Moderado",
+      TRUE ~ "Favorável"
+    )
+  ) %>%
+  # Converter para fator ordenado diretamente
+  mutate(classificacao_dep = factor(
+    classificacao_dep,
+    levels = c("Favorável", "Moderado", "Alerta", "Crítico")
+  ))
+
+# 1. Preparar os 10 municípios com maior razão de dependência
+top10_dependencia <- dados_completos %>%
+  arrange(desc(razao_dependencia)) %>%
+  head(10) %>%
+  mutate(municipio_simples = str_remove(municipio, " - PB"))
+
+# 2. Criar o scatterplot
+ggplot(dados_completos, aes(x = indice_envelhecimento, y = razao_dependencia)) +
+  # Linhas de referência
+  geom_hline(yintercept = mean(dados_completos$razao_dependencia, na.rm = TRUE),
+             linetype = "dashed", color = "gray50") +
+  geom_vline(xintercept = mean(dados_completos$indice_envelhecimento, na.rm = TRUE),
+             linetype = "dashed", color = "gray50") +
+  
+  # Todos os pontos
+  geom_point(aes(color = classificacao_dep), size = 3, alpha = 0.7) +
+  
+  # Destacar os top 10 dependência
+  geom_point(data = top10_dependencia, 
+             shape = 1, size = 4, color = "black", stroke = 1.2) +
+  
+  # Rótulos para os top 10
+  geom_text_repel(
+    data = top10_dependencia,
+    aes(label = municipio_simples),
+    size = 3.5,
+    point.padding = 0.3,
+    min.segment.length = 0.2,
+    segment.color = "grey40"
+  ) +
+  
+  # Linha de tendência
+  geom_smooth(method = "lm", se = FALSE, color = "#3498db", size = 1) +
+  
+  # Escala de cores
+  scale_color_manual(
+    values = c("Favorável" = "#1a9641", "Moderado" = "#a6d96a", 
+               "Alerta" = "#fdae61", "Crítico" = "#d7191c"),
+    name = "Nível de Dependência:"
+  ) +
+  
+  labs(
+    title = "RELAÇÃO ENTRE ENVELHECIMENTO E DEPENDÊNCIA NA PARAÍBA",
+    subtitle = "Municípios com maior razão de dependência destacados (top 10)",
+    x = "Índice de Envelhecimento (%)",
+    y = "Razão de Dependência (%)",
+    caption = "Fonte: IBGE Censo 2022 | Elaboração própria"
+  ) +
+  
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    plot.title = element_text(face = "bold", size = 16, hjust = 0.5),
+    plot.subtitle = element_text(size = 12, hjust = 0.5, margin = margin(b = 15)),
+    panel.grid.major = element_line(color = "grey90")
+  ) +
+  
+  coord_cartesian(
+    xlim = c(0, max(dados_completos$indice_envelhecimento, na.rm = TRUE) * 1.1),
+    ylim = c(0, max(dados_completos$razao_dependencia, na.rm = TRUE) * 1.1)
+  )
+
+# 1. Converter classificações para fator
+dados_completos <- dados_completos %>%
+  mutate(
+    classificacao_rd = factor(
+      classificacao_rd,
+      levels = c("Favorável", "Moderado", "Alerta", "Crítico")
+    ),
+    classificacao_ie = factor(
+      classificacao_ie,
+      levels = c("Favorável", "Moderado", "Alerta", "Crítico")
+    )
+  )
+
+# 2. Preparar os 10 municípios com maior razão de dependência
+top10_dependencia <- dados_completos %>%
+  arrange(desc(razao_dependencia)) %>%
+  head(10) %>%
+  mutate(municipio_simples = str_remove(municipio, " - PB"))
+
+# 3. Criar o scatterplot
+ggplot(dados_completos, aes(x = indice_envelhecimento, y = razao_dependencia)) +
+  # Linhas de referência
+  geom_hline(yintercept = mean(dados_completos$razao_dependencia, na.rm = TRUE),
+             linetype = "dashed", color = "gray50") +
+  geom_vline(xintercept = mean(dados_completos$indice_envelhecimento, na.rm = TRUE),
+             linetype = "dashed", color = "gray50") +
+  
+  # Todos os pontos coloridos pela classificação de DEPENDÊNCIA
+  geom_point(aes(color = classificacao_rd), size = 3, alpha = 0.7) +
+  
+  # Destacar os top 10 dependência
+  geom_point(data = top10_dependencia, 
+             shape = 1, size = 4, color = "black", stroke = 1.2) +
+  
+  # Rótulos para os top 10
+  geom_text_repel(
+    data = top10_dependencia,
+    aes(label = municipio_simples),
+    size = 3.5,
+    point.padding = 0.3,
+    min.segment.length = 0.2,
+    segment.color = "grey40"
+  ) +
+  
+  # Linha de tendência
+  geom_smooth(method = "lm", se = FALSE, color = "#3498db", size = 1) +
+  
+  # Escala de cores - usando a mesma paleta
+  scale_color_manual(
+    values = c("Favorável" = "#1a9641", "Moderado" = "#a6d96a", 
+               "Alerta" = "#fdae61", "Crítico" = "#d7191c"),
+    name = "Nível de Dependência:"
+  ) +
+  
+  labs(
+    title = "RELAÇÃO ENTRE ENVELHECIMENTO E DEPENDÊNCIA NA PARAÍBA",
+    subtitle = "Municípios com maior razão de dependência destacados (top 10)",
+    x = "Índice de Envelhecimento (%)",
+    y = "Razão de Dependência (%)",
+    caption = "Fonte: IBGE Censo 2022 | Elaboração própria"
+  ) +
+  
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    plot.title = element_text(face = "bold", size = 16, hjust = 0.5),
+    plot.subtitle = element_text(size = 12, hjust = 0.5, margin = margin(b = 15)),
+    panel.grid.major = element_line(color = "grey90")
+  ) +
+  
+  coord_cartesian(
+    xlim = c(0, max(dados_completos$indice_envelhecimento, na.rm = TRUE) * 1.1),
+    ylim = c(0, max(dados_completos$razao_dependencia, na.rm = TRUE) * 1.1)
+  )
+
+
+write.csv(top10_dependencia,
+          file = "top10_dependencia.csv")
 
