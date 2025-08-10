@@ -22,6 +22,7 @@ library(spData)
 library(cowplot)
 library(ggspatial)
 library(spdep)
+library(ggrepel)
 
 # Carregamento de dados iniciais ------------------------------------------
 
@@ -448,6 +449,32 @@ set.seed(123)
 moran_22 <- moran.mc(map_sp_2022$razao_sexo, listw = lw_22,
                      nsim = 999, zero.policy = TRUE)
 
+
+## Scatterplot Moran's I
+# 1. padroniza a variável
+z <- scale(map_sp_2022$razao_sexo)
+
+# 2. calcula o spatial lag dos z-scores
+lag_z <- spdep::lag.listw(lw_22, z)
+lw <- lw_22
+
+# recalcula vizinhança e pesos sob o nome lw
+nb  <- poly2nb(map_sp_2022, queen = TRUE)
+lw  <- nb2listw(nb, style = "W", zero.policy = TRUE)
+
+# scatterplot
+df <- data.frame(z = as.numeric(z), lag_z = as.numeric(lag_z))
+
+ggplot(df, aes(x = z, y = lag_z)) +
+  geom_point(alpha = .6) +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  labs(x = "Razão de Sexo (z-score)",
+       y = "Spatial Lag (z-score)",
+       title = "Moran Scatterplot",
+       caption = "Fonte: IBGE Censo 2022 | Elaboração Própria")
+
 # 2.6 LISA (Local Moran’s I) e anexar resultados
 lisa_22 <- localmoran(map_sp_2022$razao_sexo, lw_22, zero.policy = TRUE)
 map_sp_2022$lisa_I        <- lisa_22[,1]
@@ -504,6 +531,7 @@ ggplot(mapa_razao_sexo) +  # <<<--- OBJETO SF, NÃO SPATIAL!
     plot.subtitle = element_text(hjust = 0.5, color = "gray30"),
     plot.caption = element_text(color = "gray50", size = 9)
   )
+
 
 # MYERS -------------------------------------------------------------------
 
@@ -840,10 +868,6 @@ ggplot(dados10, aes(x = faixa_etaria, y = valor, fill = Sexo)) +
 
 
 # Idade Média/Sexo - NE ---------------------------------------------------
-
-library(sidrar)
-library(dplyr)
-library(stringr)
 
 # 1) Códigos dos 9 estados do Nordeste
 uf_ne <- c(21,22,23,24,25,26,27,28,29)
@@ -1596,9 +1620,6 @@ ggsave("cartograma_dependencia_pb_final.png", plot_final,
 
 
 ## Scatterplot 2²
-library(ggplot2)
-library(ggrepel)
-
 # 0. Criar a classificação de dependência (se ainda não existir)
 dados_completos <- dados_completos %>%
   mutate(
@@ -1755,4 +1776,1243 @@ ggplot(dados_completos, aes(x = indice_envelhecimento, y = razao_dependencia)) +
 
 write.csv(top10_dependencia,
           file = "top10_dependencia.csv")
+
+
+# Malha Estadual ----------------------------------------------------------
+
+
+# Carregar pacotes necessários
+library(geobr)
+library(ggplot2)
+library(sf)
+library(dplyr)
+library(knitr)  # Para impressão elegante de tabelas
+
+# Baixar dados dos municípios da Paraíba
+muni_pb <- read_municipality(code_muni = "PB", year = 2020)
+
+# Converter para CRS projetado
+muni_pb <- muni_pb %>% 
+  st_transform(crs = 5880)  # SIRGAS 2000 / Brazil Polyconic
+
+# Adicionar coluna numérica sequencial (1 a 223) em ordem alfabética
+muni_pb <- muni_pb %>% 
+  arrange(name_muni) %>% 
+  mutate(codigo = 1:n())
+
+# Calcular centroides
+centroides <- muni_pb %>% 
+  st_centroid()
+
+# Criar mapa com números municipais
+ggplot() +
+  geom_sf(data = muni_pb, fill = "white", color = "gray60", linewidth = 0.2) +
+  geom_sf_text(data = centroides, aes(label = codigo), size = 2.0, color = "black") +
+  labs(title = "Municípios da Paraíba") +
+  theme_void()
+
+# Salvar mapa
+ggsave("mapa_paraiba.png", width = 10, height = 10, dpi = 300)
+
+# Criar tabela de referência
+tabela_referencia <- muni_pb %>%
+  st_drop_geometry() %>%
+  select(codigo, name_muni) %>%
+  arrange(codigo) %>%
+  rename(Código = codigo, Município = name_muni)
+
+# SOLUÇÃO 1: Salvar tabela em HTML (mais elegante)
+library(kableExtra)
+
+tabela_referencia %>%
+  kable(format = "html", align = "c") %>%
+  kable_styling("striped", full_width = FALSE) %>%
+  save_kable("tabela_municipios.html")
+
+# SOLUÇÃO 2: Salvar tabela em PDF
+# install.packages("tinytex") # Se necessário
+# tinytex::install_tinytex()  # Para criar PDFs
+
+tabela_referencia %>%
+  kable(format = "latex", booktabs = TRUE, align = "c") %>%
+  save_kable("tabela_municipios.pdf")
+
+# SOLUÇÃO 3: Visualizar no Viewer do RStudio
+View(tabela_referencia)
+
+# SOLUÇÃO 4: Imprimir em partes no console
+cat("=== Tabela de Municípios da Paraíba (1-50) ===\n")
+print(tabela_referencia[1:50, ], row.names = FALSE)
+
+cat("\n\n=== Tabela de Municípios da Paraíba (51-100) ===\n")
+print(tabela_referencia[51:100, ], row.names = FALSE)
+
+cat("\n\n=== Tabela de Municípios da Paraíba (101-150) ===\n")
+print(tabela_referencia[101:150, ], row.names = FALSE)
+
+cat("\n\n=== Tabela de Municípios da Paraíba (151-200) ===\n")
+print(tabela_referencia[151:200, ], row.names = FALSE)
+
+cat("\n\n=== Tabela de Municípios da Paraíba (201-223) ===\n")
+print(tabela_referencia[201:223, ], row.names = FALSE)
+
+# Salvar tabela em CSV
+write.csv(tabela_referencia, "referencia_municipios.csv", row.names = FALSE)
+
+
+# Transição Demográfica Paraibana -----------------------------------------
+
+
+# 1. 2010
+get_2010_data <- function() {
+  # Obter dados brutos
+  dados <- get_sidra(
+    x = 1378,
+    variable = 93,
+    period = "2010",
+    geo = "City",
+    geo.filter = list("State" = 25),
+    classific = "c287",  # Classificação por idade
+    category = "all",    # Todas as categorias de idade
+    format = 4
+  )
+  
+  # Verificar e processar
+  if (nrow(dados) == 0) stop("Nenhum dado retornado para 2010")
+  
+  # Criar faixas etárias
+  dados_limpos <- dados %>%
+    rename(
+      cod_municipio = `Município (Código)`,
+      municipio = `Município`,
+      idade_grupo = `Idade`,
+      populacao = Valor
+    ) %>% 
+    mutate(
+      faixa = case_when(
+        idade_grupo %in% c("0 a 4 anos", "5 a 9 anos", "10 a 14 anos") ~ "pop_0a14",
+        idade_grupo %in% c("15 a 19 anos", "20 a 24 anos", "25 a 29 anos", "30 a 34 anos",
+                           "35 a 39 anos", "40 a 44 anos", "45 a 49 anos", "50 a 54 anos",
+                           "55 a 59 anos", "60 a 64 anos") ~ "pop_15_64",
+        idade_grupo %in% c("65 a 69 anos", "70 a 74 anos", "75 a 79 anos", "80 anos ou mais") ~ "pop_65mais",
+        TRUE ~ "outros"
+      )
+    ) %>% 
+    filter(faixa != "outros") %>% 
+    group_by(cod_municipio, municipio, faixa) %>% 
+    summarise(populacao = sum(populacao), .groups = "drop") %>% 
+    pivot_wider(names_from = faixa, values_from = populacao) %>% 
+    mutate(
+      cod_municipio = as.numeric(substr(cod_municipio, 1, 6)),
+      ano = 2010
+    )
+  
+  return(dados_limpos)
+}
+
+# Calcular OADR e YDR para 2010
+dados_2010_completo <- dados_2010 %>%
+  mutate(
+    OADR = (pop_65mais / pop_15_64) * 100,
+    YDR = (pop_0a14 / pop_15_64) * 100,
+    ano = 2010
+  ) %>%
+  select(cod_municipio, municipio, ano, pop_0a14, pop_15_64, pop_65mais, OADR, YDR)
+
+# Selecionar colunas equivalentes para 2022
+dados_2022_completo <- dados_completos %>%
+  mutate(ano = 2022) %>%
+  select(cod_municipio, municipio, ano, pop_0a14, pop_15_64, pop_65mais, OADR, YDR)
+
+# Combinar ambos os anos
+dados_anos <- bind_rows(dados_2010_completo, dados_2022_completo)
+
+# Calcular mudanças durante os 12 anos
+mudancas <- dados_anos %>%
+  select(cod_municipio, municipio, ano, OADR, YDR) %>%
+  pivot_wider(
+    names_from = ano,
+    values_from = c(OADR, YDR),
+    names_glue = "{.value}_{ano}"
+  ) %>%
+  mutate(
+    mudanca_OADR = OADR_2022 - OADR_2010,
+    mudanca_YDR = YDR_2022 - YDR_2010,
+    tendencia = case_when(
+      mudanca_OADR > 5 & mudanca_YDR < -5 ~ "Envelhecimento Acelerado",
+      mudanca_OADR > 2 & mudanca_YDR < -2 ~ "Envelhecimento Moderado",
+      mudanca_YDR > 2 ~ "Rejuvenescimento",
+      TRUE ~ "Estável"
+    )
+  )
+
+# Usando o mesmo mapa que você já tem para 2022
+dados_mapa_mudancas <- pb_municipios %>%
+  left_join(mudancas, by = c("code_muni" = "cod_municipio"))
+
+mapa_transicao <- ggplot(dados_mapa_mudancas) +
+  geom_sf(aes(fill = tendencia), color = "white", size = 0.1) +
+  scale_fill_manual(
+    name = "Tendência Demográfica",
+    values = c(
+      "Envelhecimento Acelerado" = "#e41a1c",  # Vermelho
+      "Envelhecimento Moderado" = "#ff7f00",    # Laranja
+      "Rejuvenescimento" = "#377eb8",           # Azul
+      "Estável" = "#4daf4a"                     # Verde
+    )
+  ) +
+  labs(title = "Transição Demográfica na Paraíba (2010-2022)",
+       subtitle = "Mudanças nas Razões de Dependência de Idosos (OADR) e Jovens (YDR)") +
+  theme_void() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5, size = 12),
+    legend.position = "bottom"
+  )
+
+ggsave("transicao_demografica_pb.png", mapa_transicao, width = 10, height = 8, dpi = 300)
+
+top_mudancas <- mudancas %>%
+  arrange(desc(abs(mudanca_OADR))) %>%
+  slice_head(n = 10) %>%
+  select(municipio, 
+         OADR_2010, OADR_2022, mudanca_OADR,
+         YDR_2010, YDR_2022, mudanca_YDR,
+         tendencia)
+
+print(top_mudancas)
+
+
+
+# Pirâmide Etária 10 vs 22 PB ---------------------------------------------
+
+
+# ============================================
+# Pirâmides etárias PB — 2010 vs 2022 (SIDRA 1378 e 9514)
+# - mesma escala
+# - 0–4 na base, 100+ no topo (sem inversão)
+# - overlay e pirâmide da diferença
+# ============================================
+
+# pacotes
+library(sidrar)
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(ggplot2)
+library(scales)
+options(stringsAsFactors = FALSE)
+
+dir.create("Figuras", showWarnings = FALSE)
+
+# --------------------------------------------
+# helpers
+# --------------------------------------------
+
+# Detecta a coluna "Idade" (ignora "(Código)" e "Forma de declaração")
+find_idade_col <- function(df){
+  cands <- names(df)[grepl("(?i)\\bidade\\b", names(df))]
+  cands <- setdiff(cands, "Forma de declaração da idade")
+  cands <- cands[!grepl("(?i)c[oó]digo", cands)]
+  if (length(cands) < 1) {
+    stop("Não encontrei coluna de 'Idade'. Nomes: ", paste(names(df), collapse = ", "))
+  }
+  cands[1]
+}
+
+# Extrai idade base: "Menos de 1"->0, "100 ou mais"->100, "45 a 49"->45, "37 anos"->37
+parse_idade <- function(x){
+  x <- trimws(x)
+  out <- ifelse(grepl("Menos de 1", x, ignore.case = TRUE), 0,
+                ifelse(grepl("ou mais", x, ignore.case = TRUE), 100,
+                       ifelse(grepl(" a ", x), as.numeric(sub(" .*", "", x)),
+                              as.numeric(str_extract(x, "\\d+")))))
+  out
+}
+
+# Rotula grupos quinquenais até 100+
+cut_5y <- function(a){
+  a <- pmin(pmax(a,0), 120)
+  brk <- c(seq(0,100,5), Inf)
+  lab <- c(paste(seq(0,95,5), "a", seq(4,99,5)), "100+")
+  cut(a, breaks = brk, labels = lab, right = TRUE, include.lowest = TRUE)
+}
+
+# Leitura robusta para 1378 (2010) e 9514 (2022) — PB (UF=25)
+fetch_pb <- function(table_id, year){
+  df <- sidrar::get_sidra(
+    x          = table_id,
+    variable   = 93,                # População residente
+    period     = as.character(year),
+    geo        = "State",
+    geo.filter = list(State = 25)   # 25 = PB
+  )
+  
+  # 9514 tem esta classificação; 1378 não
+  if ("Forma de declaração da idade" %in% names(df)){
+    df <- df %>% dplyr::filter(`Forma de declaração da idade` == "Total")
+  }
+  
+  idade_col <- find_idade_col(df)
+  
+  df %>%
+    dplyr::filter(Sexo %in% c("Homens","Mulheres")) %>%
+    dplyr::filter(!grepl("^Total$", .data[[idade_col]], ignore.case = TRUE)) %>%
+    dplyr::filter(!grepl("ignorada|não declarad", .data[[idade_col]], ignore.case = TRUE)) %>%
+    dplyr::transmute(
+      year      = year,
+      sex       = Sexo,
+      idade_lab = .data[[idade_col]],
+      idade_num = parse_idade(.data[[idade_col]]),
+      pop       = as.numeric(Valor)
+    ) %>%
+    dplyr::mutate(age_group = cut_5y(idade_num)) %>%
+    dplyr::group_by(year, sex, age_group) %>%
+    dplyr::summarise(pop = sum(pop, na.rm = TRUE), .groups = "drop")
+}
+
+# --------------------------------------------
+# baixa / organiza
+# --------------------------------------------
+
+pb2010 <- fetch_pb(1378, 2010)
+pb2022 <- fetch_pb(9514, 2022)
+
+pb <- bind_rows(pb2010, pb2022) %>%
+  group_by(year, sex) %>%
+  mutate(share = pop / sum(pop)) %>%
+  ungroup()
+
+# ordem natural (0–4 na base, 100+ no topo)
+age_levels <- levels(pb$age_group)
+
+# valor com sinal p/ pirâmide (homens à esquerda)
+pyr <- pb %>%
+  mutate(
+    val       = ifelse(sex == "Homens", -share, share),
+    age_group = factor(age_group, levels = age_levels)  # mantém ordem natural (sem fct_rev)
+  )
+
+MAX <- max(abs(pyr$val), na.rm = TRUE)
+
+# --------------------------------------------
+# (A) Pirâmides lado a lado (mesma escala)
+# --------------------------------------------
+p_facets <- ggplot(pyr, aes(x = val, y = age_group, fill = sex)) +
+  geom_col(width = .9, alpha = .95) +
+  facet_wrap(~year, ncol = 2, scales = "fixed") +
+  scale_y_discrete(limits = age_levels) +  # garante a ordem 0–4 ... 100+
+  scale_x_continuous(limits = c(-MAX, MAX),
+                     labels = function(x) percent(abs(x), accuracy = 1)) +
+  scale_fill_manual(values = c("Homens"="#6CC3B2","Mulheres"="#1F6FB2")) +
+  labs(x = NULL, y = NULL,
+       title = "Pirâmides etárias – Paraíba (2010 vs 2022)",
+       subtitle = "Escala fixa e grupos quinquenais idênticos",
+       fill = NULL) +
+  theme_minimal(base_size = 11) +
+  theme(panel.grid.major.y = element_line(color = "#eeeeee"),
+        legend.position = "bottom")
+ggsave("Figuras/piramides_pb_facets.png", p_facets, width = 10, height = 5, dpi = 300)
+
+# --------------------------------------------
+# (B) Overlay: 2010 preenchido × 2022 contorno
+# --------------------------------------------
+p_overlay <- ggplot() +
+  geom_col(data = dplyr::filter(pyr, year == 2010),
+           aes(x = val, y = age_group, fill = sex),
+           alpha = .28, width = .9, position = "identity") +
+  geom_col(data = dplyr::filter(pyr, year == 2022),
+           aes(x = val, y = age_group, color = sex),
+           fill = NA, width = .9, linewidth = 1, position = "identity") +
+  scale_y_discrete(limits = age_levels) +
+  scale_x_continuous(limits = c(-MAX, MAX),
+                     labels = function(x) percent(abs(x))) +
+  scale_fill_manual(values = c("Homens"="#6CC3B2","Mulheres"="#1F6FB2")) +
+  scale_color_manual(values = c("Homens"="#2C7F73","Mulheres"="#0F4C81")) +
+  labs(x=NULL, y=NULL,
+       title = "Overlay 2010×2022 – Paraíba",
+       subtitle = "2010 (preenchido) vs 2022 (contorno)") +
+  theme_minimal(base_size = 11) +
+  theme(panel.grid.major.y = element_line(color = "#eeeeee"),
+        legend.position = "bottom")
+ggsave("Figuras/piramides_pb_overlay.png", p_overlay, width = 8, height = 6, dpi = 300)
+
+# --------------------------------------------
+# (C) Pirâmide da diferença (Δ participação 2022–2010)
+# --------------------------------------------
+# ====== RÓTULOS (adicione depois de criar p_facets, p_overlay e p_diff) ======
+
+# helper: formata pontos percentuais com sinal
+fmt_pp <- function(x){
+  sinal <- ifelse(x >= 0, "+", "−")
+  paste0(sinal, scales::number(abs(x)*100, accuracy = 0.1, decimal.mark = ","), " p.p.")
+}
+
+# ---------- (C) rótulos na PIRÂMIDE DA DIFERENÇA ----------
+label_min <- 0.003  # só rotula |Δ| >= 0,3 p.p.
+
+labs_diff <- delta %>%
+  dplyr::filter(abs(diff) >= label_min) %>%
+  dplyr::mutate(
+    lab  = fmt_pp(diff),
+    xpos = ifelse(val > 0, val + MAX*0.01, val - MAX*0.01), # afasta um tiquinho
+    hj   = ifelse(val > 0, 0, 1)
+  )
+
+p_diff <- p_diff +
+  geom_text(data = labs_diff,
+            aes(x = xpos, y = age_group, label = lab, hjust = hj),
+            size = 3, check_overlap = TRUE)
+
+ggsave("Figuras/piramide_pb_diferenca.png", p_diff, width = 7, height = 6.5, dpi = 300)
+
+
+# ---------- (A) rótulos discretos nas PIRÂMIDES LADO A LADO ----------
+label_min_share <- 0.02  # rotula faixas com ≥ 2% ou os extremos
+
+labs_facets <- pyr %>%
+  dplyr::filter(share >= label_min_share | age_group %in% c("0 a 4","100+")) %>%
+  dplyr::mutate(
+    lab  = scales::percent(abs(share), accuracy = 0.1, decimal.mark = ","),
+    xpos = ifelse(val > 0, val + MAX*0.008, val - MAX*0.008),
+    hj   = ifelse(val > 0, 0, 1)
+  )
+
+p_facets <- p_facets +
+  geom_text(data = labs_facets,
+            aes(x = xpos, y = age_group, label = lab, hjust = hj),
+            size = 3, check_overlap = TRUE)
+
+ggsave("Figuras/piramides_pb_facets.png", p_facets, width = 10, height = 5, dpi = 300)
+
+
+# ---------- (B) (opcional) rótulos mínimos no OVERLAY ----------
+# Comentado para não poluir. Descomente se quiser.
+# labs_overlay <- pyr %>%
+#   dplyr::filter(year == 2022, age_group %in% c("0 a 4","60 a 64","80 a 84")) %>%
+#   dplyr::mutate(
+#     lab  = scales::percent(abs(share), accuracy = 0.1, decimal.mark = ","),
+#     xpos = ifelse(val > 0, val + MAX*0.01, val - MAX*0.01),
+#     hj   = ifelse(val > 0, 0, 1)
+#   )
+#
+# p_overlay <- p_overlay +
+#   geom_text(data = labs_overlay,
+#             aes(x = xpos, y = age_group, label = lab, hjust = hj),
+#             size = 3, check_overlap = TRUE)
+#
+# ggsave("Figuras/piramides_pb_overlay.png", p_overlay, width = 8, height = 6, dpi = 300)
+
+# fim
+
+# soma sexos e calcula participação sobre o total do ano
+pyr_tot <- bind_rows(pb2010, pb2022) |>
+  dplyr::group_by(year, age_group) |>
+  dplyr::summarise(pop = sum(pop), .groups="drop") |>
+  dplyr::group_by(year) |>
+  dplyr::mutate(share = pop / sum(pop)) |>
+  dplyr::ungroup()
+
+delta_tot <- pyr_tot |>
+  tidyr::pivot_wider(names_from = year, values_from = share) |>
+  dplyr::mutate(diff_pp = 100*(`2022` - `2010`))  # pontos percentuais
+
+lim <- max(abs(delta_tot$diff_pp))
+
+ggplot(delta_tot, aes(y = age_group, x = diff_pp, fill = diff_pp)) +
+  geom_col(width = .9) +
+  scale_x_continuous(limits = c(-lim, lim),
+                     labels = function(x) paste0(abs(x), " p.p.")) +
+  scale_fill_gradient2(low = "#C0392B", mid = "#F4F4F4", high = "#2E86C1",
+                       midpoint = 0, guide = "none") +
+  labs(x = NULL, y = NULL,
+       title = "Mudança na estrutura etária – Paraíba (2022–2010)",
+       subtitle = "Direita: ganhou participação; Esquerda: perdeu") +
+  theme_minimal(base_size = 11)
+
+
+# Nova Impressão -----------------------------------------------------------------------
+
+totais <- bind_rows(pb2010, pb2022) |>
+  dplyr::group_by(year) |>
+  dplyr::summarise(total_ano = sum(pop), .groups="drop")
+
+pyr_sex <- bind_rows(pb2010, pb2022) |>
+  dplyr::left_join(totais, by="year") |>
+  dplyr::group_by(year, sex, age_group) |>
+  dplyr::summarise(pop = sum(pop), total_ano = dplyr::first(total_ano), .groups="drop") |>
+  dplyr::mutate(share = pop / total_ano)
+
+delta_sex <- pyr_sex |>
+  dplyr::select(year, sex, age_group, share) |>
+  tidyr::pivot_wider(names_from = year, values_from = share) |>
+  dplyr::mutate(diff_pp = 100*(`2022` - `2010`),
+                val = ifelse(sex=="Homens", -diff_pp, diff_pp))
+
+lim <- max(abs(delta_sex$diff_pp))
+
+ggplot(delta_sex, aes(y = age_group, x = val, fill = diff_pp)) +
+  geom_col(width = .9) +
+  scale_x_continuous(limits = c(-lim, lim),
+                     labels = function(x) paste0(abs(x), " p.p.")) +
+  scale_fill_gradient2(low = "#C0392B", mid = "#F4F4F4", high = "#2E86C1",
+                       midpoint = 0, guide = "none") +
+  labs(x=NULL, y=NULL,
+       title = "Mudança por sexo – Paraíba (2022–2010)",
+       subtitle = "Esq.: homens (p.p. negativos), Dir.: mulheres (p.p. positivos)") +
+  theme_minimal(base_size = 11)
+
+ggsave("Figuras/piramides_pb_diff.png", p_facets, width = 10, height = 5, dpi = 300)
+
+# ver shares 95–99 e 100+ por sexo/ano
+pyr |>
+  filter(age_group %in% c("95 a 99","100+")) |>
+  select(year, sex, age_group, share) |>
+  tidyr::pivot_wider(names_from = year, values_from = share) |>
+  mutate(diff_pp = (`2022` - `2010`)*100) |>
+  arrange(sex, age_group)
+
+# checar também 95+ combinado (se sobe, ok; só trocou de 95–99 p/ 100+)
+pyr |>
+  mutate(top = ifelse(age_group %in% c("95 a 99","100+"), "95+", as.character(age_group))) |>
+  group_by(year, sex, top) |>
+  summarise(share = sum(share), .groups = "drop") |>
+  filter(top=="95+") |>
+  tidyr::pivot_wider(names_from = year, values_from = share) |>
+  mutate(diff_pp = (`2022` - `2010`)*100)
+
+
+
+# Novo Scatter IE vs RDD --------------------------------------------------
+
+# pacotes
+library(sidrar)
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(ggplot2)
+library(geobr)
+library(sf)
+library(patchwork)
+library(scales)
+library(purrr)
+
+options(stringsAsFactors = FALSE)
+sf::sf_use_s2(FALSE)
+
+# -----------------------------
+# Helpers
+# -----------------------------
+find_idade_col <- function(df){
+  nm <- names(df)
+  cand <- nm[grepl("^Idade", nm, ignore.case = TRUE)]
+  cand <- cand[!grepl("c[oó]digo|code", cand, ignore.case = TRUE)]
+  if (length(cand) == 0) stop("Não encontrei coluna de idade.")
+  if (length(cand) > 1) {
+    uc <- sapply(cand, function(x) length(unique(na.omit(df[[x]]))))
+    cand <- cand[which.max(uc)]
+  }
+  cand
+}
+
+parse_idade <- function(x){
+  x <- trimws(as.character(x))
+  out <- rep(NA_real_, length(x))
+  out[grepl("menos de 1", x, TRUE)]         <- 0
+  out[grepl("\\b100\\b.*mais", x, TRUE)]    <- 100
+  int <- is.na(out) & grepl("\\d+\\s*a\\s*\\d+", x)
+  out[int] <- as.numeric(sub(" .*", "", x[int]))
+  num <- is.na(out) & grepl("\\d+", x)
+  out[num] <- as.numeric(str_extract(x[num], "\\d+"))
+  out
+}
+
+collapse_buckets <- function(df){
+  df %>%
+    mutate(faixa = case_when(
+      idade_num >= 0  & idade_num <= 14 ~ "pop_0a14",
+      idade_num >= 15 & idade_num <= 64 ~ "pop_15_64",
+      idade_num >= 65                   ~ "pop_65mais",
+      TRUE ~ NA_character_
+    )) %>%
+    filter(!is.na(faixa)) %>%
+    group_by(cod_municipio, municipio, faixa) %>%
+    summarise(pop = sum(pop, na.rm = TRUE), .groups = "drop") %>%
+    pivot_wider(names_from = faixa, values_from = pop, values_fill = 0)
+}
+
+fetch_one_city <- function(table_id, year, cod_city){
+  df <- sidrar::get_sidra(
+    x          = table_id,
+    variable   = 93,
+    period     = as.character(year),
+    geo        = "City",
+    geo.filter = list(City = cod_city),
+    format     = 3,
+    header     = TRUE
+  )
+  
+  # 9514 tem essa classificação
+  if ("Forma de declaração da idade" %in% names(df)) {
+    df <- dplyr::filter(df, `Forma de declaração da idade` == "Total")
+  }
+  # deixa só Sexo = Total, se existir
+  if ("Sexo" %in% names(df)) {
+    df <- dplyr::filter(df, Sexo == "Total")
+  }
+  
+  # padroniza nome do município para 'municipio'
+  mun_col <- intersect(names(df), c("Município","Municipio","Nome do Município"))
+  if (length(mun_col) == 0) {
+    mun_col <- names(df)[stringr::str_detect(names(df), "Munic")]
+  }
+  if (length(mun_col) == 0) stop("Coluna de município não encontrada.")
+  df <- dplyr::mutate(df, municipio = .data[[ mun_col[1] ]])
+  
+  # acha a coluna de idade textual
+  idade_col <- find_idade_col(df)
+  
+  df %>%
+    dplyr::filter(
+      !grepl("^Total$", .data[[idade_col]], ignore.case = TRUE),
+      !grepl("ignorada|não declarad", .data[[idade_col]], ignore.case = TRUE)
+    ) %>%
+    dplyr::transmute(
+      cod_municipio = as.integer(substr(as.character(`Município (Código)`), 1, 7)),
+      municipio     = municipio,
+      idade_num     = parse_idade(.data[[idade_col]]),
+      pop           = as.numeric(Valor)
+    ) %>%
+    collapse_buckets() %>%
+    dplyr::mutate(ano = year)
+}
+
+`%||%` <- function(a, b) if (!is.null(a)) a else b
+
+prep_indic <- function(df){
+  df %>%
+    mutate(
+      den  = pmax(pop_15_64, 1),
+      OADR = 100 * pop_65mais / den,
+      YDR  = 100 * pop_0a14  / den,
+      TDR  = 100 * (pop_0a14 + pop_65mais) / den
+    ) %>%
+    select(cod_municipio, municipio, ano, OADR, YDR, TDR)
+}
+
+make_map <- function(gdf, var, title, limits, highlight = NULL){
+  ggplot() +
+    geom_sf(data = gdf, aes(fill = .data[[var]]), color = "white", size = 0.15) +
+    { if (!is.null(highlight) && nrow(highlight) > 0)
+      geom_sf(data = highlight, shape = 24, fill = "yellow", color = "black",
+              size = 2.5, stroke = 0.3) else NULL } +
+    scale_fill_viridis_c(option = "C", name = paste0(title, " (%)"),
+                         limits = limits, labels = label_number(accuracy = 0.1)) +
+    labs(title = title, subtitle = "Paraíba — municípios") +
+    theme_void() +
+    theme(
+      legend.position = "bottom",
+      plot.title = element_text(hjust = .5, face = "bold"),
+      plot.subtitle = element_text(hjust = .5)
+    )
+}
+
+# -----------------------------
+# 1) Lista de municípios da PB
+# -----------------------------
+mun_pb <- geobr::read_municipality(code_muni = "PB", year = 2020, simplified = TRUE) %>%
+  mutate(code_muni = as.integer(code_muni)) %>%
+  select(code_muni, name_muni, geom)
+
+pb_codes <- mun_pb$code_muni
+
+# -----------------------------
+# 2) Baixar 2010 e 2022 (em loop)
+# -----------------------------
+message("Baixando 2010 (1378), isso pode levar alguns minutos…")
+pb2010 <- map_dfr(pb_codes, function(cod){
+  # pequeno descanso para não sobrecarregar a API
+  Sys.sleep(0.15)
+  fetch_one_city(1378, 2010, cod)
+})
+
+message("Baixando 2022 (9514)…")
+pb2022 <- map_dfr(pb_codes, function(cod){
+  Sys.sleep(0.08)
+  fetch_one_city(9514, 2022, cod)
+})
+
+# -----------------------------
+# 3) Indicadores por ano e deltas
+# -----------------------------
+ind2010 <- prep_indic(pb2010)
+ind2022 <- prep_indic(pb2022)
+
+deltas <- ind2010 %>%
+  select(cod_municipio, municipio, OADR_2010 = OADR, YDR_2010 = YDR) %>%
+  inner_join(ind2022 %>% select(cod_municipio, OADR_2022 = OADR, YDR_2022 = YDR),
+             by = "cod_municipio") %>%
+  mutate(
+    dOADR = OADR_2022 - OADR_2010,
+    dYDR  = YDR_2022 - YDR_2010
+  )
+
+top10_codes <- deltas %>%
+  arrange(desc(dOADR)) %>%
+  slice_head(n = 10) %>%
+  pull(cod_municipio)
+
+# -----------------------------
+# 4) Geometrias + centróides para destaque
+# -----------------------------
+centros_top10 <- mun_pb %>%
+  filter(code_muni %in% top10_codes) %>%
+  st_point_on_surface() %>%
+  select(code_muni, geom)
+
+map2010 <- mun_pb %>%
+  left_join(ind2010, by = c("code_muni" = "cod_municipio"))
+
+map2022 <- mun_pb %>%
+  left_join(ind2022, by = c("code_muni" = "cod_municipio"))
+
+lim_OADR <- range(c(map2010$OADR, map2022$OADR), na.rm = TRUE)
+lim_YDR  <- range(c(map2010$YDR,  map2022$YDR),  na.rm = TRUE)
+
+# -----------------------------
+# 5) Mapas
+# -----------------------------
+m_OADR_2010 <- make_map(map2010, "OADR", "OADR 2010", lim_OADR, centros_top10)
+m_OADR_2022 <- make_map(map2022, "OADR", "OADR 2022", lim_OADR, centros_top10)
+m_YDR_2010  <- make_map(map2010, "YDR",  "YDR 2010",  lim_YDR,  centros_top10)
+m_YDR_2022  <- make_map(map2022, "YDR",  "YDR 2022",  lim_YDR,  centros_top10)
+
+painel <- (m_OADR_2010 + m_OADR_2022) / (m_YDR_2010 + m_YDR_2022) +
+  plot_layout(guides = "collect") +
+  plot_annotation(
+    title = "Paraíba — Razões de Dependência (OADR/YDR), 2010 vs 2022",
+    subtitle = "Triângulos amarelos: 10 municípios com maior aumento de OADR (2010→2022)",
+    theme = theme(
+      plot.title = element_text(hjust = .5, face = "bold", size = 14),
+      plot.subtitle = element_text(hjust = .5, size = 11),
+      legend.position = "bottom"
+    )
+  )
+
+ggsave("mapas_dependencia_pb_2010_2022.png", painel, width = 14, height = 10, dpi = 300)
+
+# (opcional) salva também os dados de variação
+readr::write_csv(deltas, "variacao_OADR_YDR_2010_2022.csv")
+
+
+# Inferência --------------------------------------------------------------
+
+
+# pacotes
+library(dplyr)
+library(ggplot2)
+library(ggrepel)
+library(scales)
+
+# ==== 1) Base 2022 com IE e RDT (assume que 'dados_completos' já existe) ====
+df22 <- dados_completos %>%
+  mutate(
+    IE  = 100 * pop_65mais / pmax(pop_0a14, 1),                      # (65+) / (0–14)
+    RDT = 100 * (pop_0a14 + pop_65mais) / pmax(pop_15_64, 1)         # (0–14 + 65+) / (15–64)
+  ) %>%
+  select(cod_municipio, municipio, IE, RDT, pop_0a14, pop_65mais, pop_15_64)
+
+# ==== 2) Médias/razões estaduais (ponderadas pelos totais) ====
+IE_PB  <- 100 * sum(df22$pop_65mais) / sum(df22$pop_0a14)
+RDT_PB <- 100 * (sum(df22$pop_0a14) + sum(df22$pop_65mais)) / sum(df22$pop_15_64)
+
+# ==== 3) Correlações ====
+pear  <- cor.test(df22$IE, df22$RDT, method = "pearson")
+spear <- cor.test(df22$IE, df22$RDT, method = "spearman")
+
+cat(
+  sprintf("r (Pearson)   = %.3f (p=%.4f)\n",  pear$estimate,  pear$p.value),
+  sprintf("rho (Spearman)= %.3f (p=%.4f)\n", spear$estimate, spear$p.value)
+)
+
+# ==== 4) Quem rotular? (usa seu top10 se existir; senão calcula) ====
+if (exists("top10_dependencia")) {
+  rotulos <- df22 %>% semi_join(top10_dependencia, by = c("cod_municipio" = "cod_municipio"))
+} else {
+  rotulos <- df22 %>% slice_max(RDT, n = 10)
+}
+
+# (cores por nível de RDT — mesmo esquema dos seus mapas)
+df22 <- df22 %>%
+  mutate(
+    classe_rdt = cut(
+      RDT,
+      breaks = c(-Inf, 40, 50, 60, Inf),
+      labels = c("Favorável (<40)", "Moderado (40–50)", "Alerta (50–60)", "Crítico (≥60)")
+    )
+  )
+
+pal <- c(
+  "Favorável (<40)" = "#6CC3B2",
+  "Moderado (40–50)"= "#A8E6A3",
+  "Alerta (50–60)"  = "#F39C12",
+  "Crítico (≥60)"   = "#E74C3C"
+)
+
+# ==== 5) Scatter ====
+p_scatter <- ggplot(df22, aes(x = IE, y = RDT)) +
+  # quadrantes (opcional: leve sombreado)
+  annotate("rect", xmin = -Inf, xmax = IE_PB, ymin = -Inf, ymax = RDT_PB, alpha=.03, fill="grey50") +
+  annotate("rect", xmin = IE_PB, xmax =  Inf, ymin = -Inf, ymax = RDT_PB, alpha=.03, fill="grey50") +
+  annotate("rect", xmin = -Inf, xmax = IE_PB, ymin = RDT_PB, ymax =  Inf, alpha=.03, fill="grey50") +
+  annotate("rect", xmin = IE_PB, xmax =  Inf, ymin = RDT_PB, ymax =  Inf, alpha=.03, fill="grey50") +
+  geom_point(aes(color = classe_rdt), alpha = .85, size = 2) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = .6) +
+  geom_vline(xintercept = IE_PB, linetype = "dashed", linewidth = .4, color = "grey30") +
+  geom_hline(yintercept = RDT_PB, linetype = "dashed", linewidth = .4, color = "grey30") +
+  geom_label_repel(
+    data = rotulos,
+    aes(label = municipio),
+    size = 2.8, label.size = 0.15, max.overlaps = Inf, seed = 123,
+    box.padding = .35, point.padding = .3
+  ) +
+  scale_color_manual(values = pal, name = "Nível de Dependência (RDT)") +
+  scale_x_continuous(name = "Índice de Envelhecimento (IE) — 65+/0–14 × 100",
+                     labels = label_number(accuracy = 1)) +
+  scale_y_continuous(name = "Razão de Dependência Total (RDT) — (0–14 + 65+)/15–64 × 100",
+                     labels = label_number(accuracy = 1)) +
+  labs(
+    title = "Relação entre Envelhecimento (IE) e Dependência (RDT) — Municípios da Paraíba (2022)",
+    subtitle = paste0(
+      "Correlação fraca: r(Pearson) = ", number(pear$estimate, accuracy = 0.01),
+      " | ρ(Spearman) = ", number(spear$estimate, accuracy = 0.01),
+      "  — linhas tracejadas: valores estaduais"
+    ),
+    caption = "Fonte: IBGE/SIDRA 9514 (2022). Elaboração própria."
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(legend.position = "bottom")
+
+p_scatter
+ggsave("Figuras/scatter_IE_vs_RDT_2022.png", p_scatter, width = 11, height = 7, dpi = 300)
+
+
+# RGI PB ------------------------------------------------------------------
+
+
+# ------------------------------------------------------------
+# Dependência demográfica (2022) — PB
+# OADR, YDR, mapas lado a lado e Top 10
+# ------------------------------------------------------------
+
+library(sidrar)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(geobr)
+library(sf)
+library(patchwork)
+
+# 1) Função para baixar e consolidar por faixas (SIDRA 9514, UF=25 PB)
+get_population_data <- function(categories, pop_name) {
+  get_sidra(
+    x = 9514,
+    variable = 93,
+    period = "2022",
+    geo = "City",
+    geo.filter = list(State = 25),
+    classific = "c287",
+    category = list(c287 = categories),
+    format = 3,
+    header = TRUE
+  ) |>
+    group_by(`Município (Código)`, Município) |>
+    summarise("{pop_name}" := sum(Valor, na.rm = TRUE), .groups = "drop") |>
+    transmute(
+      cod_municipio = as.integer(substr(as.character(`Município (Código)`), 1, 7)), # 7 dígitos
+      municipio     = Município,
+      "{pop_name}"  := .data[[pop_name]]
+    )
+}
+
+# 2) Categorias das idades (c287) que você já usa
+categorias_jovens <- c(93070, 93084, 93085)                             # 0–14
+categorias_idosos <- c(93096, 93097, 93098, 49108, 49109, 60040, 60041, 6653) # 65+
+categorias_ativa  <- c(93086:93095)                                      # 15–64
+
+# 3) Baixar blocos
+dados_jovens <- get_population_data(categorias_jovens, "pop_0a14")
+dados_idosos <- get_population_data(categorias_idosos, "pop_65mais")
+dados_ativa  <- get_population_data(categorias_ativa,  "pop_15_64")
+
+# 4) Consolidar e calcular indicadores  — JUNTA SÓ POR COD_MUNICIPIO
+dados_completos <- dados_jovens |>
+  select(cod_municipio, municipio, pop_0a14) |>
+  inner_join(select(dados_idosos, cod_municipio, pop_65mais),
+             by = "cod_municipio") |>
+  inner_join(select(dados_ativa,  cod_municipio, pop_15_64),
+             by = "cod_municipio") |>
+  # se vierem dois nomes de município, mantém o do 1º dataset
+  relocate(municipio, .after = cod_municipio) |>
+  distinct(cod_municipio, .keep_all = TRUE) |>
+  mutate(
+    den  = pmax(pop_15_64, 1),          # blindagem contra divisão por zero
+    OADR = 100 * pop_65mais / den,      # 65+ / 15–64
+    YDR  = 100 * pop_0a14  / den,       # 0–14 / 15–64
+    TDR  = 100 * (pop_0a14 + pop_65mais) / den,
+    class_OADR = cut(
+      OADR, breaks = c(0, 15, 25, 35, Inf),
+      labels = c("Muito Baixa (<15)", "Baixa (15-25)", "Moderada (25-35)", "Alta (>35)")
+    ),
+    class_YDR = cut(
+      YDR, breaks = c(0, 30, 45, 60, Inf),
+      labels = c("Muito Baixa (<30)", "Baixa (30-45)", "Moderada (45-60)", "Alta (>60)")
+    )
+  ) |>
+  select(-den)
+
+# 5) Malha municipal (7 dígitos) e join
+pb_municipios <- read_municipality(code_muni = "PB", year = 2022) |>
+  mutate(cod_municipio = as.integer(code_muni)) |>
+  st_simplify(dTolerance = 0.01)
+
+dados_mapa <- pb_municipios |>
+  left_join(dados_completos, by = "cod_municipio")
+
+# (diagnóstico rápido — opcional)
+# anti_join(dados_completos, pb_municipios, by = "cod_municipio") |> nrow()
+# anti_join(pb_municipios, dados_completos, by = "cod_municipio") |> nrow()
+
+# 6) Mapas
+mapa_OADR <- ggplot() +
+  geom_sf(data = dados_mapa, aes(fill = class_OADR), color = "white", size = 0.2) +
+  scale_fill_brewer(palette = "Reds", name = "OADR (%)") +
+  labs(title = "Razão de Dependência de Idosos (OADR)",
+       subtitle = "População 65+ / População 15–64 anos") +
+  theme_void() +
+  theme(legend.position = "bottom",
+        plot.title = element_text(hjust = 0.5, face = "bold"),
+        plot.subtitle = element_text(hjust = 0.5))
+
+mapa_YDR <- ggplot() +
+  geom_sf(data = dados_mapa, aes(fill = class_YDR), color = "white", size = 0.2) +
+  scale_fill_brewer(palette = "Blues", name = "YDR (%)") +
+  labs(title = "Razão de Dependência de Jovens (YDR)",
+       subtitle = "População 0–14 / População 15–64 anos") +
+  theme_void() +
+  theme(legend.position = "bottom",
+        plot.title = element_text(hjust = 0.5, face = "bold"),
+        plot.subtitle = element_text(hjust = 0.5))
+
+mapas_combinados <- mapa_OADR + mapa_YDR +
+  plot_annotation(
+    title = "Indicadores de Dependência Demográfica — Paraíba (2022)",
+    subtitle = "Comparação entre Dependência de Idosos (OADR) e Jovens (YDR)",
+    theme = theme(plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+                  plot.subtitle = element_text(hjust = 0.5, size = 12))
+  )
+
+ggsave("mapas_dependencia_pb_2022.png", mapas_combinados, width = 16, height = 9, dpi = 300)
+print(mapas_combinados)
+
+# 7) Top 10 (tabelas)
+top_OADR <- dados_completos |>
+  arrange(desc(OADR)) |>
+  slice_head(n = 10) |>
+  select(municipio, OADR, class_OADR)
+
+top_YDR <- dados_completos |>
+  arrange(desc(YDR)) |>
+  slice_head(n = 10) |>
+  select(municipio, YDR, class_YDR)
+
+print(list(OADR_top = top_OADR, YDR_top = top_YDR))
+
+# (opcional) exporta CSVs para conferência
+# write.csv(dados_completos, "dependencia_pb_2022.csv", row.names = FALSE)
+# write.csv(top_OADR, "top10_OADR_2022.csv", row.names = FALSE)
+# write.csv(top_YDR, "top10_YDR_2022.csv", row.names = FALSE)
+
+
+# Myers / Municípios ------------------------------------------------------
+
+# instalar/usar geobr e sf
+# install.packages("geobr")
+library(sidrar)
+library(dplyr)
+library(purrr)
+library(stringr)
+library(geobr)
+library(sf)
+library(lwgeom)
+library(purrr)
+library(ggplot2)
+library(DescTools)
+
+# Divisão Regional PNG ----------------------------------------------------
+
+# 1. Baixar as regiões intermediárias da Paraíba
+reg_int <- geobr::read_intermediate_region(
+  code_intermediate = "PB",
+  year              = 2019,
+  simplified        = TRUE,
+  cache             = TRUE
+)
+
+# 2. Criar o mapa: só linhas, sem preenchimento
+mapa_pb <- ggplot(reg_int) +
+  geom_sf(color = "black", fill = NA, size = 0.6) +
+  theme_void() +
+  ggtitle("Divisão Regional da Paraíba") +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14)
+  )
+
+# 3. Exportar como PNG
+ggsave("paraiba_divisao_regional.png", plot = mapa_pb, width = 6, height = 6, dpi = 300)
+
+
+# Filtrar Regiões~Municípios  ---------------------------------------------
+
+# 1) Baixa todos os municípios do Brasil em 2010
+all_mun <- read_municipality(
+  code_muni      = "all",
+  year           = 2010,
+  simplified     = TRUE,
+  cache          = TRUE,
+  showProgress   = FALSE,
+  keep_areas_operacionais = FALSE
+)
+
+# 2) Filtra só Paraíba (código IBGE começa em "25") e solta a geometria
+mun_pb_sf <- all_mun[substr(all_mun$code_muni, 1, 2) == "25", ]
+mun_pb_df <- st_drop_geometry(mun_pb_sf)
+
+# 3) Seleciona e renomeia colunas com base R (sem dplyr::select)
+municipios_pb <- mun_pb_df[
+  ,
+  c("code_muni", "name_muni"),
+  drop = FALSE
+]
+names(municipios_pb) <- c("cod_mun", "nome_mun")
+
+# 4) Ordena pelo nome do município
+municipios_pb <- municipios_pb[order(municipios_pb$nome_mun), ]
+
+# Verifica
+nrow(municipios_pb)     # 223
+head(municipios_pb, 10) # primeiros 10 municípios
+
+
+# rodar sidrar ------------------------------------------------------------
+
+# 1. Parâmetros
+table_2022  <- 9514
+vars_2022   <- 93
+period_2022 <- "2022"
+
+# 2. Função para baixar e filtrar pra um município
+baixar_mun_2022 <- function(cod_mun) {
+  get_sidra(
+    x          = table_2022,
+    variable   = vars_2022,
+    period     = period_2022,
+    geo        = "City",
+    geo.filter = list(City = cod_mun)
+    # aqui NÃO declaramos classific
+  ) %>%
+    filter(
+      Sexo                          == "Total",
+      `Forma de declaração da idade` == "Total"
+    ) %>%
+    transmute(
+      cod_mun    = `Município (Código)`,
+      idade      = as.numeric(str_extract(Idade, "^[0-9]+")),
+      populacao  = as.numeric(Valor)
+    )
+}
+
+# 3. Loop em todos os 223 municípios
+dados_2022 <- municipios_pb$cod_mun %>%
+  map_dfr(baixar_mun_2022)
+
+# Transformar as colunas em mesmo tipo
+dados_2022 <- dados_2022 %>%
+  mutate(cod_mun = as.numeric(cod_mun))
+
+# 4. Juntar nome e ordenar
+final_2022 <- dados_2022 %>%
+  dplyr::left_join(municipios_pb, by = "cod_mun") %>%
+  dplyr::select(nome_mun, idade, populacao) %>%
+  dplyr::arrange(nome_mun, idade)
+
+dim(final_2022)  # ~22 300 linhas
+head(final_2022, 10)
+
+# Agregando os dados
+dados_brutos <- municipios_pb$cod_mun %>%
+  map_dfr(baixar_mun_2022)
+
+dados_unicos <- dados_brutos %>%
+  group_by(cod_mun, idade) %>%
+  summarise(
+    populacao = sum(populacao, na.rm = T),
+    .groups = "drop"
+  )
+
+
+# RIs ------------------------------------------------------
+
+# 0) Carregar pacotes
+#geobr      read_intermediate_region, read_municipality
+#sf         st_transform, st_intersection, st_area, st_buffer
+#dplyr      select, mutate, group_by, filter, slice, rename, case_when
+#lwgeom     st_make_valid
+
+# 0) Opcional: desabilita o uso de S2 (usa GEOS, mais tolerante a geometrias imperfeitas)
+sf::sf_use_s2(FALSE)
+
+# 1) Baixar os shapefiles sem simplificação e validar geometrias
+muni_pb <- geobr::read_municipality(
+  code_muni  = "PB", 
+  year       = 2019, 
+  simplified = FALSE, 
+  cache      = TRUE
+) %>% 
+  sf::st_make_valid()
+
+reg_int <- geobr::read_intermediate_region(
+  code_intermediate = "PB", 
+  year              = 2019, 
+  simplified        = FALSE, 
+  cache             = TRUE
+) %>% 
+  sf::st_make_valid()
+
+# 2) Harmonizar CRS de ambos
+reg_int <- sf::st_transform(reg_int, sf::st_crs(muni_pb))
+
+# 3) Preparar objetos só com código + geometria
+#    usando colchetes para manter a coluna geom implícita
+muni_codesf <- muni_pb["code_muni"]
+reg_codesf  <- reg_int["code_intermediate"]
+
+# 4) Calcular interseções geométricas
+ints <- sf::st_intersection(muni_codesf, reg_codesf)
+
+# 5) Calcular área de cada pedaço de interseção
+ints$area <- sf::st_area(ints)
+
+# 6) Para cada município, escolher a interseção de maior área
+main_reg <- ints %>%
+  dplyr::group_by(code_muni) %>%
+  dplyr::slice_max(area, n = 1) %>%   # pega o polígono com maior área
+  dplyr::ungroup()
+
+# 7) Recodificar e montar o data.frame final
+df <- main_reg %>%
+  dplyr::rename(cod_mun = code_muni) %>%
+  dplyr::mutate(
+    regiao = dplyr::case_when(
+      code_intermediate == 2501 ~ 1,
+      code_intermediate == 2502 ~ 2,
+      code_intermediate == 2503 ~ 3,
+      code_intermediate == 2504 ~ 4,
+      TRUE                     ~ NA_integer_
+    )
+  ) %>%
+  dplyr::select(cod_mun, regiao)
+
+# 8) Conferir
+print(dim(df))      # deve ser 223  2
+print(head(df, 10))
+
+# Remover Geometrias
+muni_pb_region <- muni_pb %>%
+  rename(cod_mun = code_muni) %>%
+  left_join(
+    df %>% st_drop_geometry(),   # tira a coluna geom de df
+    by = "cod_mun"
+  )
+
+
+lookup <- df %>%
+  st_drop_geometry()
+
+# 9) Adicionar Região de Volta a Municípios
+muni_pb_region <- muni_pb %>%
+  dplyr::rename(cod_mun = code_muni) %>%
+  dplyr::left_join(lookup, by = "cod_mun")
+
+# Conferindo
+dim(muni_pb_region)    # 223 municípios + colunas extras
+names(muni_pb_region)  # veja cod_mun, nome, regiao, etc.
+
+# 10) Agregar lookup em dados_unicos
+# Junta ao seu dados_unicos
+dados_regiao <- dados_unicos %>%
+  # garante mesmo tipo de cod_mun
+  mutate(cod_mun = as.numeric(cod_mun)) %>%
+  left_join(lookup, by = "cod_mun") %>%
+  # opcional: eliminar eventuais municípios sem região
+  filter(!is.na(regiao))
+
+# Verifique
+dim(dados_regiao)       # deve ter mesmo número de linhas que dados_unicos (menos os NAs)
+head(dados_regiao)
+
+# Myers 2022 --------------------------------------------------------------
+
+
+# 1) Função para calcular o Índice de Myers
+compute_myers <- function(idade, pop, min_age = 23, max_age = 62) {
+  # Constrói um data.frame temporário e filtra as idades de interesse
+  df <- data.frame(idade = idade, pop = pop)
+  df <- df[df$idade >= min_age & df$idade <= max_age, ]
+  # Extrai o dígito terminal de cada idade
+  df$digito <- df$idade %% 10
+  # Soma a população por dígito
+  pops <- tapply(df$pop, df$digito, sum, default = 0)
+  # Garante que tenhamos todos os dígitos 0:9
+  pops <- pops[as.character(0:9)]
+  pops[is.na(pops)] <- 0
+  total <- sum(pops)
+  if(total == 0) return(NA_real_)
+  # Proporção de cada dígito
+  p <- pops / total
+  # Desvios em relação a 0.10
+  desv <- abs(p - 0.1)
+  # Índice de Myers (metade da soma dos desvios, em %)
+  myers <- sum(desv) / 2 * 100
+  return(myers)
+}
+
+# 2) Aplica a todos os 223 municípios
+library(dplyr)
+
+myers_por_mun <- dados_unicos %>%
+  group_by(cod_mun) %>%
+  summarise(
+    Myers = compute_myers(idade, populacao),
+    .groups = "drop"
+  ) %>%
+  mutate(cod_mun = as.numeric(cod_mun)) %>%
+  left_join(municipios_pb, by = "cod_mun") %>%
+  select(cod_mun, nome_mun, Myers)
+
+myers_por_mun <- dados_unicos %>%
+  group_by(cod_mun) %>%
+  summarise(
+    Myers = compute_myers(idade, populacao),
+    .groups = "drop"
+  ) %>%
+  # opcional: junta o nome do município
+  left_join(municipios_pb, by = c("cod_mun")) %>%
+  select(cod_mun, nome_mun, Myers)
+
+# 3) Veja o resultado
+print(myers_por_mun)
+
+# 4) (Opcional) Exportar
+# write_csv(myers_por_mun, "myers_index_por_municipio.csv")
 
