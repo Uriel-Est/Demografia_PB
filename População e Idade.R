@@ -3016,3 +3016,586 @@ print(myers_por_mun)
 # 4) (Opcional) Exportar
 # write_csv(myers_por_mun, "myers_index_por_municipio.csv")
 
+
+# LISA YDR/OADR -----------------------------------------------------------
+
+
+# pacotes
+library(dplyr)
+library(ggplot2)
+library(sf)
+library(geobr)
+library(sfdep)     # LISA moderninho
+library(classInt)  # (se quiser Jenks, opcional)
+library(patchwork)
+library(scales)
+library(spdep)
+sf::sf_use_s2(FALSE)
+
+
+# 0) Funções auxiliares ----------------------------------------------
+
+calc_inds <- function(df){
+  df %>%
+    mutate(den = pmax(pop_15_64, 1),
+           OADR = 100 * pop_65mais / den,
+           YDR  = 100 * pop_0a14  / den) %>%
+    select(cod_municipio, municipio, OADR, YDR)
+}
+
+# LISA: devolve fator com HH, LL, HL, LH, ns
+library(spdep)
+sf::sf_use_s2(FALSE)  # opcional, pra silenciar aviso de planaridade
+
+do_lisa <- function(sf_df, var, nsim = 999, pcut = 0.05) {
+  x  <- sf_df[[var]]
+  ok <- !is.na(x)                          # só onde tem dado
+  
+  if (!any(ok)) stop("Sem valores válidos em ", var)
+  
+  # vizinhança (queen) e pesos W no subconjunto válido
+  nb_ok <- spdep::poly2nb(sf_df[ok, ], queen = TRUE)
+  lw_ok <- spdep::nb2listw(nb_ok, style = "W", zero.policy = TRUE)
+  
+  # padroniza variável e lag espacial
+  z_ok   <- scale(x[ok])[, 1]
+  lag_ok <- spdep::lag.listw(lw_ok, z_ok, zero.policy = TRUE)
+  
+  # Moran local permutacional (sfdep)
+  lm_ok <- sfdep::local_moran(x = z_ok, nb = nb_ok, wt = lw_ok$weights, nsim = nsim)
+  
+  # pega a coluna de p-valor disponível
+  pcands <- c("p_ii_sim","p_ii","p_value","pval","p")
+  pcol   <- pcands[pcands %in% names(lm_ok)][1]
+  if (is.na(pcol)) stop("Não encontrei coluna de p-valor em local_moran(). Nomes: ",
+                        paste(names(lm_ok), collapse = ", "))
+  p_ok <- as.numeric(lm_ok[[pcol]])
+  
+  # quadrantes significativos
+  quad_ok <- dplyr::case_when(
+    p_ok <= pcut & z_ok > 0 & lag_ok > 0 ~ "High-High",
+    p_ok <= pcut & z_ok < 0 & lag_ok < 0 ~ "Low-Low",
+    p_ok <= pcut & z_ok > 0 & lag_ok < 0 ~ "High-Low",
+    p_ok <= pcut & z_ok < 0 & lag_ok > 0 ~ "Low-High",
+    TRUE ~ "ns"
+  )
+  
+  # remonta no tamanho original do sf
+  out <- rep(NA_character_, nrow(sf_df))
+  out[ok] <- quad_ok
+  factor(out, levels = c("High-High","Low-Low","High-Low","Low-High","ns"))
+}
+
+
+# Classificação qualitativa para deltas
+cat_delta <- function(x,
+                      brks = c(-Inf, -5, -2, 2, 5, Inf),
+                      labs = c("Queda forte (≤-5 p.p.)",
+                               "Queda moderada (-5 a -2)",
+                               "Estável (-2 a +2)",
+                               "Aumento moderado (+2 a +5)",
+                               "Aumento forte (≥+5)")){
+  cut(x, breaks = brks, labels = labs, include.lowest = TRUE, right = TRUE)
+}
+
+# 1) Indicadores 2010/2022 e deltas ----------------------------------
+
+ind10 <- calc_inds(pb2010) %>% rename(OADR_10 = OADR, YDR_10 = YDR)
+ind22 <- calc_inds(pb2022) %>% rename(OADR_22 = OADR, YDR_22 = YDR)
+
+delta <- ind22 %>%
+  inner_join(ind10, by = c("cod_municipio","municipio")) %>%
+  mutate(dOADR = OADR_22 - OADR_10,
+         dYDR  = YDR_22 - YDR_10,
+         cat_dOADR = cat_delta(dOADR),
+         cat_dYDR  = cat_delta(dYDR,        # para YDR a leitura inverte (queda é "bom")
+                               brks = c(-Inf, -10, -5, -2, 2, Inf),
+                               labs = c("Queda forte (≤-10)",
+                                        "Queda moderada (-10 a -5)",
+                                        "Queda leve (-5 a -2)",
+                                        "Estável (-2 a +2)",
+                                        "Aumento (>+2)")))
+
+# 2) Juntar na malha e calcular LISA (brutos) -------------------------
+
+pb10_map <- mun_pb %>%
+  mutate(code_muni = as.integer(code_muni)) %>%
+  left_join(ind10, by = c("code_muni"="cod_municipio"))
+
+pb22_map <- mun_pb %>%
+  mutate(code_muni = as.integer(code_muni)) %>%
+  left_join(ind22, by = c("code_muni"="cod_municipio"))
+
+pb10_map$LISA_OADR <- do_lisa(pb10_map, "OADR_10")
+pb10_map$LISA_YDR  <- do_lisa(pb10_map, "YDR_10")
+pb22_map$LISA_OADR <- do_lisa(pb22_map, "OADR_22")
+pb22_map$LISA_YDR  <- do_lisa(pb22_map, "YDR_22")
+
+# mapa para as diferenças (categorias)
+diff_map <- mun_pb %>%
+  mutate(code_muni = as.integer(code_muni)) %>%
+  left_join(delta, by = c("code_muni"="cod_municipio"))
+
+# 3) Paletas e temas --------------------------------------------------
+
+pal_lisa <- c("High-High"="#b2182b","Low-Low"="#2166ac",
+              "High-Low"="#ef8a62","Low-High"="#67a9cf","ns"="#e0e0e0")
+
+pal_delta_O <- c("Queda forte (≤-5 p.p.)"      = "#fddede",
+                 "Queda moderada (-5 a -2)"    = "#f8bdbd",
+                 "Estável (-2 a +2)"           = "#f5f5f5",
+                 "Aumento moderado (+2 a +5)"  = "#d95b5b",
+                 "Aumento forte (≥+5)"         = "#b2182b")
+
+pal_delta_Y <- c("Queda forte (≤-10)"          = "#08306b",
+                 "Queda moderada (-10 a -5)"   = "#2171b5",
+                 "Queda leve (-5 a -2)"        = "#6baed6",
+                 "Estável (-2 a +2)"           = "#f0f0f0",
+                 "Aumento (>+2)"               = "#9ecae1")
+
+theme_map <- theme_void(base_size = 11) +
+  theme(legend.position = "bottom",
+        plot.title = element_text(face="bold", hjust=.5, size=11),
+        plot.subtitle = element_text(hjust=.5))
+
+# 4) Mapas — LISA (valores brutos) -----------------------------------
+
+p_lisa_O_2010 <- ggplot(pb10_map) +
+  geom_sf(aes(fill = LISA_OADR), color="white", size=.15) +
+  scale_fill_manual(values = pal_lisa, name = NULL) +
+  labs(title = "LISA — OADR 2010") + theme_map
+
+p_lisa_O_2022 <- ggplot(pb22_map) +
+  geom_sf(aes(fill = LISA_OADR), color="white", size=.15) +
+  scale_fill_manual(values = pal_lisa, name = NULL) +
+  labs(title = "LISA — OADR 2022") + theme_map
+
+p_lisa_Y_2010 <- ggplot(pb10_map) +
+  geom_sf(aes(fill = LISA_YDR), color="white", size=.15) +
+  scale_fill_manual(values = pal_lisa, name = NULL) +
+  labs(title = "LISA — YDR 2010") + theme_map
+
+p_lisa_Y_2022 <- ggplot(pb22_map) +
+  geom_sf(aes(fill = LISA_YDR), color="white", size=.15) +
+  scale_fill_manual(values = pal_lisa, name = NULL) +
+  labs(title = "LISA — YDR 2022") + theme_map
+
+grid_lisa <- (p_lisa_O_2010 | p_lisa_O_2022) / (p_lisa_Y_2010 | p_lisa_Y_2022) +
+  plot_annotation(title = "Paraíba — Clusters espaciais (LISA) de OADR e YDR",
+                  subtitle = "High-High/Low-Low = agrupamentos significativos (p<0,05); ns = não significativo.",
+                  theme = theme(plot.title = element_text(hjust=.5, face="bold", size=14),
+                                plot.subtitle = element_text(hjust=.5, size=10)))
+
+ggsave("Figuras/pb_LISA_OADR_YDR_2010_2022.png", grid_lisa, w=12, h=8, dpi=300)
+
+# 5) Mapas — Diferenças categorizadas (qualitativos) -----------------
+
+p_dOADR_cat <- ggplot(diff_map) +
+  geom_sf(aes(fill = cat_dOADR), color="white", size=.15) +
+  scale_fill_manual(values = pal_delta_O, name = "Δ OADR (p.p.)\n2022–2010") +
+  labs(title="OADR — variação em categorias") + theme_map
+
+p_dYDR_cat <- ggplot(diff_map) +
+  geom_sf(aes(fill = cat_dYDR), color="white", size=.15) +
+  scale_fill_manual(values = pal_delta_Y, name = "Δ YDR (p.p.)\n2022–2010") +
+  labs(title="YDR — variação em categorias") + theme_map
+
+grid_delta <- p_dOADR_cat | p_dYDR_cat +
+  plot_annotation(title = "Paraíba — Variações 2010→2022 em faixas interpretáveis",
+                  subtitle = "OADR (vermelho): aumento piora a dependência por idosos • YDR (azul): queda indica menos jovens por adulto.",
+                  theme = theme(plot.title = element_text(hjust=.5, face="bold", size=14),
+                                plot.subtitle = element_text(hjust=.5, size=10)))
+
+ggsave("Figuras/pb_DIFF_categ_OADR_YDR_2010_2022.png", grid_delta, w=12, h=6.5, dpi=300)
+
+
+
+# OADR YDR³ ---------------------------------------------------------------
+
+
+
+# pacotes
+library(dplyr)
+library(ggplot2)
+library(sf)
+library(geobr)
+library(scales)
+library(patchwork)  # <- Adicionado para combinar os gráficos
+
+# --------------------------------------------
+# ENTRADAS esperadas já no ambiente:
+#   pb2010, pb2022  -> data.frames com: cod_municipio, municipio, pop_0a14, pop_15_64, pop_65mais
+#   mun_pb          -> sf da malha municipal (geobr 2020). Se não existir, leio abaixo.
+# --------------------------------------------
+if (!exists("mun_pb")) {
+  mun_pb <- geobr::read_municipality("PB", year = 2020, simplified = TRUE)
+}
+mun_pb <- mun_pb |> mutate(code_muni = as.integer(code_muni))
+
+# --------------------------------------------
+# 1) Indicadores por ano
+# --------------------------------------------
+calc_inds <- function(df){
+  df |>
+    mutate(
+      den  = pmax(pop_15_64, 1),
+      OADR = 100 * pop_65mais / den,   # 65+ / 15–64
+      YDR  = 100 * pop_0a14  / den     # 0–14 / 15–64
+    ) |>
+    select(cod_municipio, municipio, OADR, YDR)
+}
+
+ind10 <- calc_inds(pb2010) |> rename(OADR_10 = OADR, YDR_10 = YDR)
+ind22 <- calc_inds(pb2022) |> rename(OADR_22 = OADR, YDR_22 = YDR)
+
+# limites FIXOS por indicador (iguais para 2010 e 2022)
+o_max <- ceiling(max(c(ind10$OADR_10, ind22$OADR_22), na.rm = TRUE) / 5) * 5
+y_max <- ceiling(max(c(ind10$YDR_10,  ind22$YDR_22),  na.rm = TRUE) / 5) * 5
+
+# --------------------------------------------
+# 2) Junta com a malha
+# --------------------------------------------
+map10 <- mun_pb |> left_join(ind10, by = c("code_muni" = "cod_municipio"))
+map22 <- mun_pb |> left_join(ind22, by = c("code_muni" = "cod_municipio"))
+
+# --------------------------------------------
+# 3) Temas e paletas
+# --------------------------------------------
+theme_map <- theme_void(base_size = 11) +
+  theme(legend.position = "bottom",
+        plot.title = element_text(face = "bold", hjust = .5),
+        plot.subtitle = element_text(hjust = .5))
+
+pal_OADR <- scale_fill_gradient(
+  name   = "OADR (%)",
+  low    = "#FDECEC",  # claro
+  high   = "#B2182B",  # escuro
+  limits = c(0, o_max),
+  labels = label_number(accuracy = 1)
+)
+
+pal_YDR <- scale_fill_gradient(
+  name   = "YDR (%)",
+  low    = "#EAF2FB",  # claro
+  high   = "#1E5AA8",  # escuro
+  limits = c(0, y_max),
+  labels = label_number(accuracy = 1)
+)
+
+# --------------------------------------------
+# 4) Mapas “flat” por ano
+# --------------------------------------------
+p_OADR_2010 <- ggplot(map10) +
+  geom_sf(aes(fill = OADR_10), color = "white", linewidth = .2) +
+  pal_OADR +
+  labs(title = "OADR — Paraíba, 2010", subtitle = "65+ / 15–64 × 100") +
+  theme_map
+
+p_OADR_2022 <- ggplot(map22) +
+  geom_sf(aes(fill = OADR_22), color = "white", linewidth = .2) +
+  pal_OADR +
+  labs(title = "OADR — Paraíba, 2022", subtitle = "65+ / 15–64 × 100") +
+  theme_map
+
+p_YDR_2010 <- ggplot(map10) +
+  geom_sf(aes(fill = YDR_10), color = "white", linewidth = .2) +
+  pal_YDR +
+  labs(title = "YDR — Paraíba, 2010", subtitle = "0–14 / 15–64 × 100") +
+  theme_map
+
+p_YDR_2022 <- ggplot(map22) +
+  geom_sf(aes(fill = YDR_22), color = "white", linewidth = .2) +
+  pal_YDR +
+  labs(title = "YDR — Paraíba, 2022", subtitle = "0–14 / 15–64 × 100") +
+  theme_map
+
+# --------------------------------------------
+# 5) Salva figuras individuais
+# --------------------------------------------
+dir.create("Figuras", showWarnings = FALSE)
+ggsave("Figuras/OADR_2010_flat.png", p_OADR_2010, width = 11, height = 7, dpi = 300)
+ggsave("Figuras/OADR_2022_flat.png", p_OADR_2022, width = 11, height = 7, dpi = 300)
+ggsave("Figuras/YDR_2010_flat.png",  p_YDR_2010,  width = 11, height = 7, dpi = 300)
+ggsave("Figuras/YDR_2022_flat.png",  p_YDR_2022,  width = 11, height = 7, dpi = 300)
+
+# --------------------------------------------
+# 6) Combina os quatro mapas com patchwork
+# --------------------------------------------
+combined_plot <- (p_OADR_2010 | p_OADR_2022) / (p_YDR_2010 | p_YDR_2022)
+
+# Exibe na tela
+combined_plot
+
+# Salva o combinado
+ggsave("Figuras/Indicadores_combinados.png", combined_plot, width = 16, height = 12, dpi = 300)
+
+
+# YDR OADR REVERSO --------------------------------------------------------
+
+
+library(readr)
+library(dplyr)
+library(stringr)
+
+# =========================================================
+# 1) IE: quem MENOS envelheceu (ou rejuvenesceu)
+#    usando analise_envelhecimento_pb_completa.csv
+# =========================================================
+ie <- read_csv("analise_envelhecimento_pb_completa.csv",
+               show_col_types = FALSE)
+
+# Checagem rápida dos nomes (só pra garantir)
+names(ie)
+# [1] "cod_municipio" "municipio" "pop_0a14" "pop_65mais" "indice_envelhecimento"
+#     "percentual_idosos" "razao_dependencia" "classificacao"
+#     "pop_60mais" "indice_60mais" "diferenca_abs" "diferenca_rel"
+
+# Interpretação suposta:
+# - indice_envelhecimento = IE 2022
+# - diferenca_abs e diferenca_rel = variação 2022-2010 (se for o contrário, inverta o sinal)
+# Rejuvenesceu  => diferenca_abs < 0  (caiu o IE)
+# Estagnou      => |diferenca_abs| ~ 0
+# Envelheceu    => diferenca_abs > 0
+
+# Top 10 “rejuvenescimento” (queda absoluta do IE)
+top10_rejuven_ie <- ie %>%
+  filter(!is.na(diferenca_abs)) %>%
+  arrange(diferenca_abs, diferenca_rel) %>%  # mais negativo primeiro
+  slice_head(n = 10) %>%
+  select(cod_municipio, municipio, 
+         IE_2022 = indice_envelhecimento,
+         delta_IE_abs = diferenca_abs, 
+         delta_IE_rel = diferenca_rel,
+         RDT_2022 = razao_dependencia)
+
+# Top 10 estabilidade (variação mais próxima de zero)
+top10_estavel_ie <- ie %>%
+  filter(!is.na(diferenca_abs)) %>%
+  arrange(abs(diferenca_abs)) %>%
+  slice_head(n = 10) %>%
+  select(cod_municipio, municipio, IE_2022 = indice_envelhecimento,
+         delta_IE_abs = diferenca_abs, delta_IE_rel = diferenca_rel)
+
+# Top 10 envelhecimento (maiores altas do IE)
+top10_envelheceu_ie <- ie %>%
+  filter(!is.na(diferenca_abs)) %>%
+  arrange(desc(diferenca_abs), desc(diferenca_rel)) %>%
+  slice_head(n = 10) %>%
+  select(cod_municipio, municipio, IE_2022 = indice_envelhecimento,
+         delta_IE_abs = diferenca_abs, delta_IE_rel = diferenca_rel)
+
+top10_rejuven_ie
+top10_estavel_ie
+top10_envelheceu_ie
+
+
+# =========================================================
+# 2) OADR/YDR: “oposto” do que você já tem (2010 vs 2022)
+#    usando variacao_OADR_YDR_2010_2022.csv
+# =========================================================
+var <- read_csv("variacao_OADR_YDR_2010_2022.csv", show_col_types = FALSE)
+
+# Detecta as colunas por padrão (flexível a nomes)
+pick_col <- function(nm, ...) {
+  pat <- paste0("(?i)(", paste(c(...), collapse="|"), ")")
+  hits <- nm[str_detect(nm, pat)]
+  if (length(hits) == 0) NA_character_ else hits[1]
+}
+nm <- names(var)
+
+c_muni     <- pick_col(nm, "^muni", "municipio", "nome_mun")
+c_oadr10   <- pick_col(nm, "oadr.*2010","2010.*oadr")
+c_oadr22   <- pick_col(nm, "oadr.*2022","2022.*oadr")
+c_ydr10    <- pick_col(nm, "ydr.*2010","2010.*ydr")
+c_ydr22    <- pick_col(nm, "ydr.*2022","2022.*ydr")
+c_cod      <- pick_col(nm, "^cod", "cod_mun", "cod_municipio")
+
+stopifnot(!is.na(c_muni), !is.na(c_oadr10), !is.na(c_oadr22),
+          !is.na(c_ydr10), !is.na(c_ydr22))
+
+base <- var %>%
+  transmute(
+    cod_municipio = if (!is.na(c_cod)) .data[[c_cod]] else NA,
+    municipio     = .data[[c_muni]],
+    OADR_2010     = as.numeric(.data[[c_oadr10]]),
+    OADR_2022     = as.numeric(.data[[c_oadr22]]),
+    YDR_2010      = as.numeric(.data[[c_ydr10]]),
+    YDR_2022      = as.numeric(.data[[c_ydr22]])
+  ) %>%
+  mutate(
+    delta_OADR = OADR_2022 - OADR_2010,
+    delta_YDR  = YDR_2022  - YDR_2010
+  )
+
+# “Oposto” do seu top de envelhecimento:
+# - Quem MAIS caiu em OADR (redução da dependência idosa)
+top10_queda_oadr <- base %>%
+  arrange(delta_OADR) %>%             # mais negativo = maior queda
+  slice_head(n = 10) %>%
+  select(cod_municipio, municipio, OADR_2010, OADR_2022, delta_OADR)
+
+# - Quem MAIS subiu em YDR (juventude ganhando peso)
+top10_alta_ydr <- base %>%
+  arrange(desc(delta_YDR)) %>%        # mais positivo = maior alta
+  slice_head(n = 10) %>%
+  select(cod_municipio, municipio, YDR_2010, YDR_2022, delta_YDR)
+
+# (Opcional) “anti-top combinado”: queda de OADR + alta de YDR
+anti_top10_comb <- base %>%
+  mutate(
+    r1 = percent_rank(-delta_OADR),   # menor delta_OADR => melhor (queda maior)
+    r2 = percent_rank( delta_YDR),    # maior delta_YDR  => melhor (alta maior)
+    score_rejuven = (r1 + r2)/2
+  ) %>%
+  arrange(desc(score_rejuven)) %>%
+  slice_head(n = 10) %>%
+  select(cod_municipio, municipio, OADR_2010, OADR_2022, delta_OADR,
+         YDR_2010, YDR_2022, delta_YDR, score_rejuven)
+
+top10_queda_oadr
+top10_alta_ydr
+anti_top10_comb
+
+
+# delta YDR OADR ----------------------------------------------------------
+
+
+
+# pacotes
+library(dplyr)
+library(ggplot2)
+library(geobr)
+library(sf)
+library(patchwork)
+library(scales)
+library(grid)   # para unit() nas barras da legenda
+
+# --- 1) indicadores por ano
+calc_inds <- function(df){
+  df %>%
+    mutate(
+      den  = pmax(pop_15_64, 1),
+      OADR = 100 * pop_65mais / den,
+      YDR  = 100 * pop_0a14  / den
+    ) %>%
+    select(cod_municipio, municipio, OADR, YDR)
+}
+
+ind10 <- calc_inds(pb2010) %>% rename(OADR_10 = OADR, YDR_10 = YDR)
+ind22 <- calc_inds(pb2022) %>% rename(OADR_22 = OADR, YDR_22 = YDR)
+
+# --- 2) deltas (2022–2010)
+delta <- ind22 %>%
+  inner_join(ind10, by = c("cod_municipio","municipio")) %>%
+  mutate(
+    dOADR = OADR_22 - OADR_10,
+    dYDR  = YDR_22 - YDR_10
+  )
+
+# (opcional) top 10 aumentos de OADR para marcar com triângulo
+top10_up_OADR <- delta %>%
+  arrange(desc(dOADR)) %>%
+  slice_head(n = 10)
+
+# --- 3) junta com a malha municipal (geobr 2020)
+# se ainda não tiver:
+# mun_pb <- read_municipality("PB", year=2020, simplified = TRUE) |>
+#   mutate(code_muni = as.integer(code_muni))
+
+map_df <- mun_pb %>%
+  mutate(code_muni = as.integer(code_muni)) %>%
+  left_join(delta, by = c("code_muni" = "cod_municipio"))
+
+# pontos dos top10 (centroides) para o overlay
+top_pts <- mun_pb %>%
+  mutate(code_muni = as.integer(code_muni)) %>%
+  inner_join(top10_up_OADR, by = c("code_muni" = "cod_municipio")) %>%
+  st_point_on_surface()
+
+# --- 4) escalas simétricas, rótulos e paletas
+limO <- ceiling(max(abs(map_df$dOADR), na.rm = TRUE))         # p.p.
+limY <- ceiling(max(abs(map_df$dYDR ), na.rm = TRUE))
+
+fmt_pp <- label_number(accuracy = 0.1, decimal.mark = ",", suffix = " p.p.")
+brks_O <- c(-limO, 0, limO)
+brks_Y <- c(-limY, 0, limY)
+
+pal_red <- list(
+  scale_fill_gradient2(
+    name   = "Δ OADR (p.p.)\n2022 – 2010",
+    low    = "#F3D1D1", mid = "#FFFFFF", high = "#B2182B",
+    limits = c(-limO, limO),
+    breaks = brks_O, labels = fmt_pp
+  ),
+  guides(fill = guide_colorbar(
+    title.position = "top", title.hjust = 0.5,
+    barwidth = unit(80, "mm"), barheight = unit(4, "mm"),
+    ticks = TRUE
+  ))
+)
+
+pal_blue <- list(
+  scale_fill_gradient2(
+    name   = "Δ YDR (p.p.)\n2022 – 2010",
+    low    = "#1E5AA8", mid = "#FFFFFF", high = "#D9E6F6",
+    limits = c(-limY, limY),
+    breaks = brks_Y, labels = fmt_pp
+  ),
+  guides(fill = guide_colorbar(
+    title.position = "top", title.hjust = 0.5,
+    barwidth = unit(80, "mm"), barheight = unit(4, "mm"),
+    ticks = TRUE
+  ))
+)
+
+theme_map <- theme_void(base_size = 11) +
+  theme(legend.position = "bottom",
+        legend.text = element_text(size = 8),
+        plot.title = element_text(face = "bold", hjust = .5),
+        plot.subtitle = element_text(hjust = .5))
+
+# --- 5) mapas de diferença
+p_dOADR <- ggplot(map_df) +
+  geom_sf(aes(fill = dOADR), color = "white", linewidth = .15) +
+  geom_sf(data = top_pts, shape = 24, size = 2.2,
+          fill = "#FFD400", color = "black", stroke = .3) +
+  pal_red +
+  labs(title = "OADR — Diferença 2022–2010") +
+  theme_map
+
+p_dYDR <- ggplot(map_df) +
+  geom_sf(aes(fill = dYDR), color = "white", linewidth = .15) +
+  pal_blue +
+  labs(title = "YDR — Diferença 2022–2010") +
+  theme_map
+
+# --- 6) histogramas (distribuição dos deltas) — limites e rótulos iguais aos mapas
+p_hist_O <- ggplot(delta, aes(x = dOADR)) +
+  geom_histogram(binwidth = .5, fill = "#B2182B", color = "white", linewidth = .2) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  scale_x_continuous(limits = c(-limO, limO), breaks = brks_O, labels = fmt_pp) +
+  labs(title = "Distribuição de Δ OADR", x = NULL, y = NULL) +
+  theme_minimal(base_size = 10) +
+  theme(panel.grid.minor = element_blank())
+
+p_hist_Y <- ggplot(delta, aes(x = dYDR)) +
+  geom_histogram(binwidth = .5, fill = "#1E5AA8", color = "white", linewidth = .2) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  scale_x_continuous(limits = c(-limY, limY), breaks = brks_Y, labels = fmt_pp) +
+  labs(title = "Distribuição de Δ YDR", x = NULL, y = NULL) +
+  theme_minimal(base_size = 10) +
+  theme(panel.grid.minor = element_blank())
+
+# --- 7) patchwork 2x2 (mapas em cima, histogramas embaixo)
+out <- (p_dOADR | p_dYDR) / (p_hist_O | p_hist_Y) +
+  plot_annotation(
+    title = "Paraíba — Diferenças 2022–2010 nos Indicadores de Dependência",
+    subtitle = "Escalas centradas em 0 (pontos percentuais). Triângulos: 10 maiores aumentos de OADR.",
+    theme = theme(plot.title = element_text(hjust = .5, size = 14, face = "bold"),
+                  plot.subtitle = element_text(hjust = .5, size = 10))
+  )
+
+ggsave("Figuras/mapas_dependencia_pb_DIFF_2010_2022.png", out,
+       width = 13, height = 9, dpi = 300)
+out
+
